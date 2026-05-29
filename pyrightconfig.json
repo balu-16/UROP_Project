@@ -1,0 +1,25 @@
+{
+  "pythonVersion": "3.11",
+  "include": ["backend"],
+  "exclude": [
+    "backend/.venv",
+    "backend/.pytest_cache",
+    "backend/storage_test",
+    "frontend",
+    "**/__pycache__"
+  ],
+  "extraPaths": ["backend"],
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none",
+  "reportUnknownArgumentType": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownParameterType": "none",
+  "reportUnknownVariableType": "none",
+  "reportAny": "none",
+  "reportExplicitAny": "none",
+  "reportMissingTypeArgument": "none",
+  "reportUnannotatedClassAttribute": "none",
+  "reportDeprecated": "none",
+  "reportUnusedCallResult": "none"
+}
