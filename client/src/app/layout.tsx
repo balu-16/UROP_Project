@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
-import { Inter, Sora } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 import { MotionConfig } from "framer-motion";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,18 +9,22 @@ const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
   display: "swap",
-});
-
-const sora = Sora({
-  subsets: ["latin"],
-  variable: "--font-display",
-  display: "swap",
+  preload: true,
+  fallback: ["system-ui", "-apple-system", "sans-serif"],
+  adjustFontFallback: true,
 });
 
 export const metadata: Metadata = {
   title: "RAGnostic — Adaptive Retrieval-Augmented AI",
   description:
     "A research-ready chatbot with adaptive retrieval, graph expansion, threshold-based depth selection, and structured streaming answers.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0a0e1a",
 };
 
 export default function RootLayout({
@@ -31,7 +35,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={`${inter.variable} ${sora.variable} font-sans antialiased`}
+        className={`${inter.variable} font-sans antialiased`}
       >
         <TooltipProvider delayDuration={300}>
           <MotionConfig reducedMotion="user">

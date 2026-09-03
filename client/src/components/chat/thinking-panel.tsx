@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { BrainCircuit, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 interface ThinkingPanelProps {
   reasoning?: string;
@@ -30,42 +29,30 @@ export function ThinkingPanel({ reasoning, isActive }: ThinkingPanelProps) {
   if (!hasContent) return null;
 
   return (
-    <div className="mb-3">
+    <div className="mb-2">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-full border border-border/40 bg-foreground/[0.03] px-2.5 py-1 text-[11px] font-medium text-foreground/55 transition-colors hover:bg-foreground/[0.07] hover:text-foreground/75"
+        className="mono-meta inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-[11px] text-foreground/55 transition-colors hover:bg-secondary hover:text-foreground"
       >
-        <BrainCircuit
-          className={`h-3.5 w-3.5 ${isActive ? "animate-pulse" : ""}`}
-        />
+        <span className={`h-1.5 w-1.5 rounded-full ${isActive ? "animate-pulse bg-foreground/50" : "bg-foreground/30"}`} aria-hidden />
         {isActive ? "Thinking…" : "Thought process"}
         <ChevronDown
-          className={`h-3 w-3 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          className={`h-3 w-3 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
         />
       </button>
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="overflow-hidden"
-          >
-            <div
-              ref={bodyRef}
-              className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-border/30 bg-foreground/[0.02] px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap text-foreground/50"
-            >
-              {reasoning}
-              {isActive && (
-                <span className="ml-0.5 inline-block h-3 w-[2px] animate-pulse bg-foreground/40 align-middle" />
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {open && (
+        <div
+          ref={bodyRef}
+          className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-lg border border-border bg-card px-3 py-2 text-xs leading-relaxed text-foreground/55"
+        >
+          {reasoning}
+          {isActive && (
+            <span className="ml-0.5 inline-block h-3 w-[2px] animate-pulse bg-foreground/40 align-middle" />
+          )}
+        </div>
+      )}
     </div>
   );
 }

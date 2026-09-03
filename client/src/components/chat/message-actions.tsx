@@ -8,7 +8,6 @@ import {
   RotateCcw,
   Check,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -77,21 +76,16 @@ export function MessageActions({
   ];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.15 }}
-      className="flex items-center gap-0.5 -ml-1 mt-2"
-    >
+    <div className="-ml-1 mt-1.5 flex items-center gap-0.5">
       {actions.map((action) => (
         <Tooltip key={action.label}>
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               onClick={action.onClick}
-              className={`h-7 w-7 rounded-md text-foreground/40 hover:text-foreground/70 hover:bg-foreground/5 transition-colors ${
-                action.active ? "text-foreground/80 bg-foreground/5" : ""
+              className={`h-8 w-8 rounded-lg text-foreground/45 hover:bg-secondary hover:text-foreground ${
+                action.active ? "bg-secondary text-foreground" : ""
               }`}
               aria-label={action.label}
             >
@@ -103,6 +97,6 @@ export function MessageActions({
           </TooltipContent>
         </Tooltip>
       ))}
-    </motion.div>
+    </div>
   );
 }

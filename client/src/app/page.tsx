@@ -12,11 +12,11 @@ import {
 import { Button } from "@/components/ui/button";
 
 const fadeUp = {
-  hidden: { opacity: 0, y: 24 },
+  hidden: { opacity: 0, y: 12 },
   show: (delay: number) => ({
     opacity: 1,
     y: 0,
-    transition: { duration: 0.6, delay, ease: [0.21, 0.47, 0.32, 0.98] as const },
+    transition: { duration: 0.4, delay, ease: [0.21, 0.47, 0.32, 0.98] as const },
   }),
 };
 
@@ -94,41 +94,29 @@ function LogoMark({ className }: { className?: string }) {
 
 export default function LandingPage() {
   return (
-    <div className="relative min-h-screen overflow-x-clip bg-background text-foreground">
-      {/* Atmosphere */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-grid bg-grid-fade" />
-        <div className="glow-orb left-1/2 top-[-220px] h-[420px] w-[720px] -translate-x-1/2 bg-accent/20 animate-float-slow" />
-        <div className="glow-orb right-[-160px] top-[340px] h-[360px] w-[360px] bg-violet-500/12" />
-        <div className="glow-orb bottom-[-180px] left-[-120px] h-[320px] w-[320px] bg-accent/10" />
-      </div>
-
+    <div className="relative min-h-dvh bg-background text-foreground">
       {/* Nav */}
-      <header className="sticky top-0 z-40 border-b border-border/40 bg-background/70 backdrop-blur-xl">
-        <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+      <header className="sticky top-0 z-40 border-b border-border bg-background">
+        <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2.5" aria-label="RAGnostic home">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-accent/30 bg-accent/10 text-accent shadow-[0_0_24px_-6px] shadow-accent/40">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-foreground">
               <LogoMark />
             </span>
-            <span className="font-display text-lg font-semibold tracking-tight">
+            <span className="text-[15px] font-semibold tracking-tight">
               RAGnostic
             </span>
           </Link>
 
-          <div className="hidden items-center gap-8 text-sm text-foreground/60 md:flex">
-            <a href="#features" className="hover:text-foreground transition-colors">
+          <div className="hidden items-center gap-7 text-sm text-foreground/60 md:flex">
+            <a href="#features" className="transition-colors hover:text-foreground">
               Features
             </a>
-            <a href="#how-it-works" className="hover:text-foreground transition-colors">
+            <a href="#how-it-works" className="transition-colors hover:text-foreground">
               How it works
             </a>
           </div>
 
-          <Button
-            asChild
-            size="sm"
-            className="gap-1.5 bg-accent font-medium text-accent-foreground hover:bg-accent/90 shadow-[0_0_28px_-8px] shadow-accent/50"
-          >
+          <Button asChild size="sm" className="gap-1.5">
             <Link href="/chat">
               Launch app
               <ArrowRight className="h-3.5 w-3.5" />
@@ -139,10 +127,10 @@ export default function LandingPage() {
 
       <main className="relative">
         {/* Hero */}
-        <section className="mx-auto flex max-w-6xl flex-col items-center px-4 pb-24 pt-20 text-center sm:px-6 sm:pt-28">
+        <section className="mx-auto flex max-w-3xl flex-col items-center px-4 pb-16 pt-16 text-center sm:px-6 sm:pt-24">
           <motion.div variants={fadeUp} initial="hidden" animate="show" custom={0}>
-            <span className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/8 px-3.5 py-1.5 text-xs font-medium text-accent">
-              <span className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_8px_2px] shadow-accent/50" />
+            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-foreground/60">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
               Adaptive RAG · Graph expansion · Threshold policy
             </span>
           </motion.div>
@@ -151,19 +139,18 @@ export default function LandingPage() {
             variants={fadeUp}
             initial="hidden"
             animate="show"
-            custom={0.12}
-            className="mt-7 max-w-3xl font-display text-4xl font-bold leading-[1.08] tracking-tight sm:text-6xl"
+            custom={0.08}
+            className="mt-6 max-w-2xl text-balance text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl"
           >
-            Answers grounded in{" "}
-            <span className="text-gradient">your documents</span>, not guesses.
+            Answers grounded in your documents, not guesses.
           </motion.h1>
 
           <motion.p
             variants={fadeUp}
             initial="hidden"
             animate="show"
-            custom={0.24}
-            className="mt-6 max-w-xl text-base leading-relaxed text-foreground/55 sm:text-lg"
+            custom={0.16}
+            className="mt-5 max-w-xl text-balance text-base leading-relaxed text-foreground/60 sm:text-lg"
           >
             RAGnostic measures retrieval confidence for every question,
             expands context through a knowledge graph, and streams structured,
@@ -174,14 +161,10 @@ export default function LandingPage() {
             variants={fadeUp}
             initial="hidden"
             animate="show"
-            custom={0.36}
-            className="mt-9 flex w-full flex-col items-center justify-center gap-3 sm:w-auto sm:flex-row"
+            custom={0.24}
+            className="mt-8 flex w-full flex-col items-center justify-center gap-3 sm:w-auto sm:flex-row"
           >
-            <Button
-              asChild
-              size="lg"
-              className="w-full gap-2 bg-accent px-7 font-semibold text-accent-foreground hover:bg-accent/90 shadow-[0_0_40px_-10px] shadow-accent/60 sm:w-auto"
-            >
+            <Button asChild size="lg" className="w-full gap-2 px-6 sm:w-auto">
               <Link href="/chat">
                 Start chatting
                 <ArrowRight className="h-4 w-4" />
@@ -191,7 +174,7 @@ export default function LandingPage() {
               asChild
               size="lg"
               variant="outline"
-              className="w-full border-border/70 bg-transparent px-7 font-medium hover:bg-foreground/5 sm:w-auto"
+              className="w-full px-6 sm:w-auto"
             >
               <a href="#features">Explore features</a>
             </Button>
@@ -201,41 +184,41 @@ export default function LandingPage() {
             variants={fadeUp}
             initial="hidden"
             animate="show"
-            custom={0.48}
-            className="mt-14 w-full max-w-4xl"
+            custom={0.32}
+            className="mt-12 w-full max-w-3xl"
           >
-            <div className="glass relative overflow-hidden rounded-2xl p-1.5 shadow-2xl shadow-black/50">
-              <div className="rounded-xl border border-border/40 bg-card/80 p-5 text-left sm:p-7">
-                <div className="flex items-center gap-1.5 pb-4">
-                  <span className="h-2.5 w-2.5 rounded-full bg-red-400/60" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-yellow-400/60" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-green-400/60" />
-                  <span className="ml-3 text-xs text-foreground/35">ragnostic — chat</span>
+            <div className="relative overflow-hidden rounded-xl border border-border bg-card">
+              <div className="p-5 text-left sm:p-6">
+                <div className="flex items-center gap-1.5 border-b border-border pb-3">
+                  <span className="h-2.5 w-2.5 rounded-full bg-foreground/15" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-foreground/15" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-foreground/15" />
+                  <span className="mono-meta ml-3 text-[11px] text-foreground/40">ragnostic — chat</span>
                 </div>
-                <div className="space-y-4 text-sm leading-relaxed">
+                <div className="space-y-4 pt-4 text-sm leading-relaxed">
                   <div className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-secondary px-4 py-2.5 text-foreground/90">
                     What changed between v1 and v2 of the spec?
                   </div>
                   <div className="flex items-start gap-3">
-                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-accent/25 bg-accent/10 text-accent">
+                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground/70">
                       <Sparkles className="h-3.5 w-3.5" />
                     </span>
                     <div className="min-w-0 space-y-2 text-foreground/75">
-                      <p className="font-semibold text-foreground">
+                      <p className="font-medium text-foreground">
                         Three changes separate v2 from v1:
                       </p>
                       <ul className="list-disc space-y-1 pl-5">
                         <li>
-                          <strong className="text-foreground">Auth flow</strong> moved to refresh rotation [1]
+                          <strong className="font-medium text-foreground">Auth flow</strong> moved to refresh rotation [1]
                         </li>
                         <li>
-                          <strong className="text-foreground">Rate limits</strong> raised to 90 req/min [2]
+                          <strong className="font-medium text-foreground">Rate limits</strong> raised to 90 req/min [2]
                         </li>
                         <li>
-                          <strong className="text-foreground">Webhooks</strong> added for indexing events [2]
+                          <strong className="font-medium text-foreground">Webhooks</strong> added for indexing events [2]
                         </li>
                       </ul>
-                      <p className="text-xs text-foreground/40">
+                      <p className="mono-meta text-[11px] text-foreground/40">
                         Sources: spec-v2.md · changelog.md
                       </p>
                     </div>
@@ -247,128 +230,125 @@ export default function LandingPage() {
         </section>
 
         {/* Features */}
-        <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 sm:px-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.6 }}
-            className="mx-auto max-w-2xl text-center"
-          >
-            <h2 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-              Retrieval that adapts, answers you can trust
-            </h2>
-            <p className="mt-4 text-foreground/55">
-              Most chatbots guess. RAGnostic measures retrieval confidence
-              and expands depth only when the evidence demands it.
-            </p>
-          </motion.div>
+        <section id="features" className="border-t border-border">
+          <div className="mx-auto max-w-6xl scroll-mt-20 px-4 py-16 sm:px-6 sm:py-20">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-80px" }}
+              transition={{ duration: 0.4 }}
+              className="mx-auto max-w-2xl text-center"
+            >
+              <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+                Retrieval that adapts, answers you can trust
+              </h2>
+              <p className="mt-3 text-foreground/60">
+                Most chatbots guess. RAGnostic measures retrieval confidence
+                and expands depth only when the evidence demands it.
+              </p>
+            </motion.div>
 
-          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {features.map((feature, i) => (
-              <motion.div
-                key={feature.title}
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-60px" }}
-                transition={{ duration: 0.5, delay: i * 0.08 }}
-                className="group glass rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1 hover:border-accent/30 hover:shadow-[0_8px_40px_-12px] hover:shadow-accent/25"
-              >
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-accent/25 bg-accent/10 text-accent transition-shadow duration-300 group-hover:shadow-[0_0_20px_-4px] group-hover:shadow-accent/50">
-                  <feature.icon className="h-5 w-5" />
-                </span>
-                <h3 className="mt-5 font-display text-lg font-semibold">
-                  {feature.title}
-                </h3>
-                <p className="mt-2.5 text-sm leading-relaxed text-foreground/50">
-                  {feature.description}
-                </p>
-              </motion.div>
-            ))}
+            <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {features.map((feature) => (
+                <motion.div
+                  key={feature.title}
+                  initial={{ opacity: 0, y: 12 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-60px" }}
+                  transition={{ duration: 0.4 }}
+                  className="rounded-xl border border-border bg-card p-5"
+                >
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background text-foreground/80">
+                    <feature.icon className="h-4 w-4" />
+                  </span>
+                  <h3 className="mt-4 text-[15px] font-semibold tracking-tight">
+                    {feature.title}
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-foreground/60">
+                    {feature.description}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </section>
 
         {/* How it works */}
-        <section id="how-it-works" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 sm:px-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.6 }}
-            className="mx-auto max-w-2xl text-center"
-          >
-            <h2 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-              From upload to insight in three steps
-            </h2>
-          </motion.div>
+        <section id="how-it-works" className="border-t border-border">
+          <div className="mx-auto max-w-6xl scroll-mt-20 px-4 py-16 sm:px-6 sm:py-20">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-80px" }}
+              transition={{ duration: 0.4 }}
+              className="mx-auto max-w-2xl text-center"
+            >
+              <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+                From upload to insight in three steps
+              </h2>
+            </motion.div>
 
-          <div className="relative mt-14 grid gap-10 md:grid-cols-3 md:gap-6">
-            <div
-              aria-hidden
-              className="absolute left-[16%] right-[16%] top-6 hidden h-px bg-gradient-to-r from-transparent via-accent/40 to-transparent md:block"
-            />
-            {steps.map((step, i) => (
-              <motion.div
-                key={step.number}
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-60px" }}
-                transition={{ duration: 0.5, delay: i * 0.12 }}
-                className="relative text-center md:text-left"
-              >
-                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-accent/30 bg-background font-display text-sm font-bold text-accent shadow-[0_0_24px_-6px] shadow-accent/40 md:mx-0">
-                  {step.number}
-                </span>
-                <h3 className="mt-5 font-display text-lg font-semibold">{step.title}</h3>
-                <p className="mt-2.5 text-sm leading-relaxed text-foreground/50">
-                  {step.description}
-                </p>
-              </motion.div>
-            ))}
+            <div className="relative mt-10 grid gap-8 md:grid-cols-3 md:gap-6">
+              {steps.map((step) => (
+                <motion.div
+                  key={step.number}
+                  initial={{ opacity: 0, y: 12 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-60px" }}
+                  transition={{ duration: 0.4 }}
+                  className="relative"
+                >
+                  <span className="mono-meta text-xs text-foreground/40">
+                    {step.number}
+                  </span>
+                  <h3 className="mt-2 text-[15px] font-semibold tracking-tight">{step.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-foreground/60">
+                    {step.description}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </section>
 
         {/* CTA */}
-        <section className="mx-auto max-w-6xl px-4 pb-24 pt-8 sm:px-6">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.6 }}
-            className="glass relative overflow-hidden rounded-3xl px-6 py-16 text-center sm:px-12"
-          >
-            <div className="glow-orb left-1/2 top-[-140px] h-[280px] w-[480px] -translate-x-1/2 bg-accent/15" />
-            <h2 className="relative font-display text-3xl font-bold tracking-tight sm:text-4xl">
-              Ready to interrogate your documents?
-            </h2>
-            <p className="relative mx-auto mt-4 max-w-lg text-foreground/55">
-              Sign up in seconds, index your first document, and watch adaptive
-              retrieval find what keyword search never could.
-            </p>
-            <Button
-              asChild
-              size="lg"
-              className="relative mt-8 gap-2 bg-accent px-8 font-semibold text-accent-foreground hover:bg-accent/90 shadow-[0_0_40px_-10px] shadow-accent/60"
+        <section className="border-t border-border">
+          <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-80px" }}
+              transition={{ duration: 0.4 }}
+              className="rounded-2xl border border-border bg-card px-6 py-12 text-center sm:px-12 sm:py-16"
             >
-              <Link href="/chat">
-                Launch RAGnostic
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
-          </motion.div>
+              <h2 className="mx-auto max-w-xl text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+                Ready to interrogate your documents?
+              </h2>
+              <p className="mx-auto mt-3 max-w-lg text-foreground/60">
+                Sign up in seconds, index your first document, and watch adaptive
+                retrieval find what keyword search never could.
+              </p>
+              <Button asChild size="lg" className="mt-7 gap-2 px-6">
+                <Link href="/chat">
+                  Launch RAGnostic
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </motion.div>
+          </div>
         </section>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-border/40">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 py-8 text-sm text-foreground/40 sm:flex-row sm:px-6">
+      <footer className="border-t border-border">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-6 text-sm text-foreground/50 sm:flex-row sm:px-6">
           <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-md border border-accent/25 bg-accent/10 text-accent">
+            <span className="flex h-6 w-6 items-center justify-center rounded-md border border-border bg-card text-foreground/70">
               <LogoMark className="h-3.5 w-3.5" />
             </span>
-            <span className="font-display font-medium text-foreground/60">RAGnostic</span>
+            <span className="font-medium text-foreground/70">RAGnostic</span>
           </div>
-          <p>Adaptive retrieval-augmented generation.</p>
+          <p className="text-[13px]">Adaptive retrieval-augmented generation.</p>
         </div>
       </footer>
     </div>

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
 import { Sidebar } from "@/components/sidebar/sidebar";
 import { ChatArea } from "@/components/chat/chat-area";
 import {
@@ -23,7 +22,6 @@ import {
   createSession,
   logout as apiLogout,
   getAccessToken,
-  setAccessToken,
 } from "@/lib/api";
 import type { BackendSession, ConversationGroup, User } from "@/types";
 
@@ -65,20 +63,12 @@ function groupSessions(sessions: BackendSession[]): ConversationGroup[] {
 
 function BootSplash() {
   return (
-    <div className="flex h-dvh flex-col items-center justify-center gap-5 bg-background">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.85 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4, ease: "easeOut" }}
-        className="relative"
-      >
-        <div className="absolute inset-0 -z-10 rounded-full bg-accent/20 blur-2xl" />
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl border border-accent/25 bg-accent/10 text-accent shadow-[0_0_36px_-8px] shadow-accent/50">
-          <LogoMark size={26} />
-        </span>
-      </motion.div>
-      <div className="flex items-center gap-2.5 text-sm text-foreground/60">
-        <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
+    <div className="flex h-dvh flex-col items-center justify-center gap-4 bg-background">
+      <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-foreground">
+        <LogoMark size={22} />
+      </span>
+      <div className="flex items-center gap-2.5 text-sm text-foreground/55">
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground/70" />
         Loading RAGnostic
       </div>
     </div>
@@ -216,11 +206,11 @@ export default function ChatPage() {
       />
 
       <Dialog open={mobileOpen} onOpenChange={setMobileOpen}>
-        <DialogContent className="w-[290px] rounded-r-2xl p-0 bg-sidebar border-sidebar-border pb-[env(safe-area-inset-bottom)]">
+        <DialogContent className="w-[300px] p-0">
           <DialogHeader className="sr-only">
             <DialogTitle>Navigation</DialogTitle>
           </DialogHeader>
-          <div className="flex flex-col h-full">{sidebarContent}</div>
+          <div className="flex h-dvh flex-col pt-[env(safe-area-inset-top)]">{sidebarContent}</div>
         </DialogContent>
       </Dialog>
 

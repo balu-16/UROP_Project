@@ -46,7 +46,7 @@ function CodeBlock({ children }: { children?: React.ReactNode }) {
     <div className="group/code relative mb-3">
       <pre
         ref={preRef}
-        className="hljs rounded-lg bg-[#16162a] border border-border/50 overflow-x-auto !my-0 py-3.5 px-4 text-[13px]"
+        className="hljs overflow-x-auto rounded-lg border border-border bg-secondary/60 !my-0 px-4 py-3.5 text-[13px] leading-relaxed"
       >
         {children}
       </pre>
@@ -54,7 +54,7 @@ function CodeBlock({ children }: { children?: React.ReactNode }) {
         type="button"
         onClick={handleCopy}
         aria-label={copied ? "Copied" : "Copy code"}
-        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md border border-border/40 bg-[#1f1f36]/90 text-foreground/45 opacity-0 transition-all hover:text-foreground/85 group-hover/code:opacity-100"
+        className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card text-foreground/50 transition-colors hover:text-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/code:opacity-100 [@media(hover:hover)]:focus-within:opacity-100"
       >
         {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
@@ -75,32 +75,32 @@ export function MarkdownRenderer({
         rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
         components={{
           h1: ({ children }) => (
-            <h1 className="text-xl font-bold text-foreground mb-3 mt-4 first:mt-0">
+            <h1 className="mb-3 mt-4 text-xl font-semibold tracking-tight text-foreground first:mt-0">
               {children}
             </h1>
           ),
           h2: ({ children }) => (
-            <h2 className="text-lg font-semibold text-foreground mb-2 mt-4 first:mt-0">
+            <h2 className="mb-2 mt-4 text-lg font-semibold tracking-tight text-foreground first:mt-0">
               {children}
             </h2>
           ),
           h3: ({ children }) => (
-            <h3 className="text-base font-semibold text-foreground mb-2 mt-3 first:mt-0">
+            <h3 className="mb-2 mt-3 text-base font-semibold tracking-tight text-foreground first:mt-0">
               {children}
             </h3>
           ),
           p: ({ children }) => (
-            <p className="text-[15px] leading-[1.7] text-foreground/90 mb-3 last:mb-0">
+            <p className="mb-3 text-[15px] leading-[1.7] text-foreground/90 last:mb-0">
               {children}
             </p>
           ),
           ul: ({ children }) => (
-            <ul className="list-disc list-outside ml-5 mb-3 space-y-1 text-[15px] leading-[1.7] text-foreground/90">
+            <ul className="mb-3 ml-5 list-outside list-disc space-y-1 text-[15px] leading-[1.7] text-foreground/90">
               {children}
             </ul>
           ),
           ol: ({ children }) => (
-            <ol className="list-decimal list-outside ml-5 mb-3 space-y-1 text-[15px] leading-[1.7] text-foreground/90">
+            <ol className="mb-3 ml-5 list-outside list-decimal space-y-1 text-[15px] leading-[1.7] text-foreground/90">
               {children}
             </ol>
           ),
@@ -112,7 +112,7 @@ export function MarkdownRenderer({
             if (isInline) {
               return (
                 <code
-                  className="rounded bg-muted px-1.5 py-0.5 text-[13px] font-mono text-foreground/90"
+                  className="rounded-md border border-border bg-secondary px-1.5 py-0.5 font-mono text-[13px] text-foreground"
                   {...props}
                 >
                   {children}
@@ -122,7 +122,7 @@ export function MarkdownRenderer({
             return (
               <code
                 className={cn(
-                  "font-mono text-[13px] text-foreground/90 bg-transparent",
+                  "bg-transparent font-mono text-[13px] text-foreground",
                   className,
                 )}
                 {...props}
@@ -149,10 +149,10 @@ export function MarkdownRenderer({
                   onClick={() => onCitation(n)}
                   aria-label={`Show source ${n}`}
                   className={cn(
-                    "mx-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border align-super px-1 text-[10px] font-semibold leading-none transition-colors",
+                    "mx-0.5 inline-flex h-[20px] min-w-[20px] items-center justify-center rounded-md border px-1 align-super font-mono text-[10px] font-medium leading-none transition-colors",
                     active
-                      ? "border-sky-400/70 bg-sky-400/20 text-sky-300"
-                      : "border-border/60 bg-foreground/[0.06] text-foreground/55 hover:border-sky-400/50 hover:bg-sky-400/10 hover:text-sky-300",
+                      ? "border-foreground/30 bg-secondary text-foreground"
+                      : "border-border bg-card text-foreground/55 hover:border-foreground/25 hover:text-foreground",
                   )}
                 >
                   {n}
@@ -162,7 +162,7 @@ export function MarkdownRenderer({
             return (
               <a
                 href={href}
-                className="text-blue-400 hover:text-blue-300 underline underline-offset-2"
+                className="text-foreground underline decoration-foreground/30 underline-offset-2 hover:decoration-foreground/60"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -170,24 +170,24 @@ export function MarkdownRenderer({
               </a>
             );
           },
-          hr: () => <hr className="border-border my-4" />,
+          hr: () => <hr className="my-4 border-border" />,
           blockquote: ({ children }) => (
-            <blockquote className="border-l-2 border-border pl-4 my-3 text-foreground/70 italic">
+            <blockquote className="my-3 border-l-2 border-border pl-4 italic text-foreground/70">
               {children}
             </blockquote>
           ),
           table: ({ children }) => (
-            <div className="overflow-x-auto mb-3 rounded-lg border border-border/50">
-              <table className="w-full border-collapse text-[14px]">{children}</table>
+            <div className="-mx-1 overflow-x-auto px-1">
+              <table className="mb-3 w-full min-w-[480px] border-collapse rounded-lg border border-border text-[14px]">{children}</table>
             </div>
           ),
           th: ({ children }) => (
-            <th className="border-b border-border/60 bg-foreground/[0.04] px-3 py-2 text-left font-semibold text-foreground/85">
+            <th className="border-b border-border bg-secondary/60 px-3 py-2 text-left font-medium text-foreground">
               {children}
             </th>
           ),
           td: ({ children }) => (
-            <td className="border-b border-border/30 px-3 py-2 text-foreground/80 align-top">
+            <td className="border-b border-border/60 px-3 py-2 align-top text-foreground/80">
               {children}
             </td>
           ),

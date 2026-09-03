@@ -19,18 +19,22 @@ export function SidebarSearch({ className, value, onChange }: SidebarSearchProps
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Search conversations…"
-          className="w-full rounded-lg bg-sidebar-accent/50 border border-transparent py-2 pl-9 pr-8 text-sm text-sidebar-foreground placeholder:text-sidebar-foreground/40 outline-none transition-all duration-200 focus:border-sidebar-accent-foreground/25 focus:bg-sidebar-accent/80"
+          className="h-10 w-full rounded-lg border border-transparent bg-secondary/70 pl-9 pr-14 text-sm text-sidebar-foreground outline-none transition-colors placeholder:text-sidebar-foreground/40 focus:border-border focus:bg-secondary"
           aria-label="Search conversations"
         />
-        {value && (
+        {value ? (
           <button
             type="button"
             onClick={() => onChange("")}
             aria-label="Clear search"
-            className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-sidebar-foreground/40 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground/80"
+            className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-sidebar-foreground/40 transition-colors hover:bg-secondary hover:text-sidebar-foreground/80"
           >
-            <X className="h-3 w-3" />
+            <X className="h-3.5 w-3.5" />
           </button>
+        ) : (
+          <kbd className="mono-meta pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border border-border bg-card px-1.5 py-0.5 text-[10px] text-sidebar-foreground/40 lg:block">
+            ⌘K
+          </kbd>
         )}
       </div>
     </div>

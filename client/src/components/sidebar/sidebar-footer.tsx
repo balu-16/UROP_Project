@@ -1,7 +1,6 @@
 "use client";
 
 import { LogOut } from "lucide-react";
-import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { User } from "@/types";
 
@@ -13,18 +12,15 @@ export function SidebarFooter({ user, onLogout }: { user: User; onLogout: () => 
     .slice(0, 2)
     .toUpperCase();
   return (
-    <div className="shrink-0 border-t border-sidebar-border p-3">
-      <motion.div
-        whileHover={{ backgroundColor: "rgba(255,255,255,0.05)" }}
-        transition={{ duration: 0.15 }}
+    <div className="shrink-0 border-t border-sidebar-border p-3 pb-[env(safe-area-inset-bottom)]">
+      <div
         className={cn(
-          "flex w-full items-center gap-3 rounded-xl px-2 py-2 text-sm transition-colors",
-          "focus-within:ring-1 focus-within:ring-sidebar-accent-foreground/25",
+          "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-sm",
         )}
       >
         {/* Avatar */}
         <div
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent/80 to-violet-500/80 text-[11px] font-semibold text-white ring-1 ring-white/10"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-secondary text-[11px] font-semibold text-sidebar-foreground"
           aria-hidden
         >
           {initials}
@@ -33,7 +29,7 @@ export function SidebarFooter({ user, onLogout }: { user: User; onLogout: () => 
           <p className="truncate text-sm font-medium text-sidebar-foreground">
             {user.name}
           </p>
-          <p className="truncate text-[11px] text-sidebar-foreground/40">
+          <p className="truncate text-[11px] text-sidebar-foreground/50">
             {user.email}
           </p>
         </div>
@@ -41,11 +37,11 @@ export function SidebarFooter({ user, onLogout }: { user: User; onLogout: () => 
           onClick={onLogout}
           aria-label="Log out"
           title="Log out"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sidebar-foreground/40 transition-all hover:bg-red-500/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-accent-foreground/30"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sidebar-foreground/50 transition-colors hover:bg-secondary hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/15"
         >
           <LogOut className="h-4 w-4" />
         </button>
-      </motion.div>
+      </div>
     </div>
   );
 }

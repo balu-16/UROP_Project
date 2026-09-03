@@ -81,7 +81,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                       ? "text-red-400"
                       : t.type === "success"
                         ? "text-emerald-400"
-                        : "text-sky-400"
+                        : "text-foreground/60"
                   }`}
                 />
                 <p className="flex-1 text-[13px] leading-snug text-foreground/85">

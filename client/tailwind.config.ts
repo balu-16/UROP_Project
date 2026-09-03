@@ -8,6 +8,11 @@ const config: Config = {
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
+    container: {
+      center: true,
+      padding: "1rem",
+      screens: { sm: "640px", md: "768px", lg: "1024px", xl: "1152px" },
+    },
     extend: {
       colors: {
         background: "hsl(var(--background))",
@@ -57,7 +62,11 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-inter)", "system-ui", "-apple-system", "sans-serif"],
-        display: ["var(--font-display)", "var(--font-inter)", "sans-serif"],
+        display: ["var(--font-inter)", "system-ui", "-apple-system", "sans-serif"],
+        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
+      },
+      boxShadow: {
+        subtle: "0 1px 2px hsl(0 0% 0% / 0.28), 0 4px 16px -8px hsl(0 0% 0% / 0.4)",
       },
       keyframes: {
         "typing-dot": {

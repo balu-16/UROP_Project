@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
 import { API_BASE_URL } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 export function ConnectionDot() {
   const [online, setOnline] = useState(true);
@@ -36,24 +36,12 @@ export function ConnectionDot() {
   }, []);
 
   return (
-    <motion.span
-      initial={false}
-      animate={{
-        backgroundColor: online ? "#34d399" : "#f87171",
-        scale: online ? [1, 1.18, 1] : 1,
-      }}
-      transition={{
-        backgroundColor: { duration: 0.4 },
-        scale: {
-          duration: 2.2,
-          repeat: Infinity,
-          ease: "easeInOut",
-        },
-      }}
+    <span
       title={online ? "Backend connected" : "Backend unreachable"}
-      className={`h-2 w-2 rounded-full shadow-[0_0_8px_1px] ${
-        online ? "shadow-emerald-400/50" : "shadow-red-400/50"
-      }`}
+      className={cn(
+        "h-2 w-2 rounded-full",
+        online ? "bg-emerald-500" : "bg-red-400",
+      )}
       role="status"
       aria-label={online ? "Connected" : "Disconnected"}
     />

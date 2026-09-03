@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { PanelLeft, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -13,7 +13,6 @@ import { ConnectionDot } from "./connection-dot";
 import { useChat } from "@/hooks/use-chat";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard";
 import { uploadFiles, createSession } from "@/lib/api";
-import { cn } from "@/lib/utils";
 
 interface ChatAreaProps {
   sidebarOpen: boolean;
@@ -160,31 +159,27 @@ export function ChatArea({
       onDrop={onDrop}
     >
       {/* Top bar */}
-      <div className="flex items-center h-12 shrink-0 px-3 border-b border-border/40 bg-card/20 backdrop-blur supports-[backdrop-filter]:bg-card/20">
-        {!sidebarOpen && (
-          <motion.div
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.2 }}
-          >
+      <div className="grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-border bg-background px-3">
+        <div className="flex items-center">
+          {!sidebarOpen && (
             <Button
               variant="ghost"
               size="icon"
               onClick={onToggleSidebar}
-              className="h-8 w-8 text-foreground/50 hover:text-foreground hover:bg-accent/10 mr-2"
+              className="h-9 w-9 text-foreground/60 hover:bg-secondary hover:text-foreground"
               aria-label="Open sidebar"
             >
               <PanelLeft className="h-4 w-4" />
             </Button>
-          </motion.div>
-        )}
-        <div className="flex-1" />
+          )}
+        </div>
         <div className="flex items-center gap-2 text-sm">
           <ConnectionDot />
-          <span className="font-display font-medium tracking-tight">RAGnostic</span>
-          <span className="hidden sm:inline-flex rounded-full bg-accent/10 border border-accent/20 px-2 py-0.5 text-[11px] font-medium text-accent">ADAPTIVE</span>
+          <span className="text-sm font-medium tracking-tight">RAGnostic</span>
         </div>
-        <div className="flex-1" />
+        <div className="flex items-center justify-end">
+          <span className="mono-meta hidden rounded-md border border-border bg-card px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-foreground/45 sm:inline-block">adaptive</span>
+        </div>
       </div>
 
       {/* Messages or Empty state */}
@@ -197,21 +192,16 @@ export function ChatArea({
           onFollowUp={(q) => sendMessage(q)}
         />
       ) : (
-        <div className="flex-1 flex flex-col items-center justify-center px-4 pb-32">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4">
           <EmptyState />
         </div>
       )}
 
       {/* Bottom composer area */}
-      <div
-        className={cn(
-          "shrink-0 pb-4 pt-2 transition-all duration-300",
-          hasMessages ? "" : "absolute bottom-0 left-0 right-0",
-        )}
-      >
+      <div className="sticky bottom-0 shrink-0 bg-background px-0 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
         {/* Suggestion chips — only show when empty */}
         {!hasMessages && (
-          <div className="mb-4">
+          <div className="mb-3">
             <SuggestionChips onSelect={handleSuggestion} />
           </div>
         )}
@@ -234,14 +224,14 @@ export function ChatArea({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-background/70 backdrop-blur-sm"
+            className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-background/80"
           >
-            <div className="flex flex-col items-center gap-3 rounded-3xl border-2 border-dashed border-sky-400/50 bg-card/80 px-12 py-10">
-              <UploadCloud className="h-10 w-10 text-sky-400" />
-              <p className="text-sm font-medium text-foreground/85">
+            <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-foreground/25 bg-card px-10 py-8 text-center shadow-subtle">
+              <UploadCloud className="h-8 w-8 text-foreground/60" />
+              <p className="text-sm font-medium text-foreground">
                 Drop documents to index them
               </p>
-              <p className="text-xs text-foreground/45">PDF, TXT, Markdown, PPTX — indexed into this chat only</p>
+              <p className="text-xs text-foreground/50">PDF, TXT, Markdown, PPTX — indexed into this chat only</p>
             </div>
           </motion.div>
         )}

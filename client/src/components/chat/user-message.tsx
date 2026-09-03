@@ -1,20 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { memo, useEffect, useRef, useState } from "react";
 import { Check, Pencil, X } from "lucide-react";
 
 interface UserMessageProps {
   content: string;
-  index?: number;
   messageId?: string;
   isStreaming?: boolean;
   onEdit?: (messageId: string, newText: string) => void;
 }
 
-export function UserMessage({
+export const UserMessage = memo(function UserMessage({
   content,
-  index = 0,
   messageId,
   isStreaming,
   onEdit,
@@ -54,16 +51,13 @@ export function UserMessage({
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2, delay: index * 0.03, ease: "easeOut" }}
-      className="group flex justify-end px-4 py-3"
+    <div
+      className="offscreen-msg group flex justify-end py-2.5"
       role="article"
       aria-label="User message"
     >
       {editing ? (
-        <div className="w-[min(560px,85%)] rounded-2xl border border-accent/30 bg-card px-3 py-2.5 shadow-lg">
+        <div className="w-[min(560px,90%)] rounded-2xl border border-border bg-card px-3 py-2.5 shadow-subtle">
           <textarea
             ref={textareaRef}
             value={draft}
@@ -89,7 +83,7 @@ export function UserMessage({
               type="button"
               onClick={cancel}
               aria-label="Cancel edit"
-              className="flex h-7 items-center gap-1 rounded-full px-2.5 text-xs text-foreground/50 transition-colors hover:bg-white/10 hover:text-foreground/80"
+              className="flex h-8 items-center gap-1 rounded-full px-2.5 text-xs text-foreground/60 transition-colors hover:bg-secondary hover:text-foreground"
             >
               <X className="h-3.5 w-3.5" /> Cancel
             </button>
@@ -98,28 +92,28 @@ export function UserMessage({
               onClick={commit}
               disabled={!draft.trim()}
               aria-label="Save and resend"
-              className="flex h-7 items-center gap-1 rounded-full bg-white px-3 text-xs font-medium text-black transition-opacity disabled:opacity-40"
+              className="flex h-8 items-center gap-1 rounded-full bg-foreground px-3 text-xs font-medium text-background transition-opacity disabled:opacity-40"
             >
               <Check className="h-3.5 w-3.5" /> Send
             </button>
           </div>
         </div>
       ) : (
-        <div className="flex max-w-[70%] items-start gap-1.5">
+        <div className="flex max-w-[85%] items-start gap-1 sm:max-w-[70%]">
           <button
             type="button"
             onClick={startEdit}
             disabled={!canEdit}
             aria-label="Edit and resend message"
-            className="mt-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-foreground/30 opacity-0 transition-all hover:bg-foreground/10 hover:text-foreground/70 group-hover:opacity-100 disabled:pointer-events-none"
+            className="mt-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground/35 transition-colors hover:bg-secondary hover:text-foreground/70 disabled:pointer-events-none [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>
-          <div className="whitespace-pre-wrap break-words rounded-2xl bg-secondary border border-border/40 px-4 py-2.5 text-[15px] leading-[1.6] text-foreground shadow-sm">
+          <div className="whitespace-pre-wrap break-words rounded-2xl rounded-br-md border border-border/60 bg-secondary px-4 py-2.5 text-[15px] leading-[1.6] text-foreground">
             {content}
           </div>
         </div>
       )}
-    </motion.div>
+    </div>
   );
-}
+});
