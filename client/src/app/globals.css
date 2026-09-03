@@ -1,0 +1,219 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        /* Deep midnight — with subtle blue undertone for depth */
+        --background: 224 38% 5%;
+        --foreground: 220 20% 96%;
+
+        --card: 224 28% 8%;
+        --card-foreground: 220 20% 96%;
+
+        --popover: 224 28% 8%;
+        --popover-foreground: 220 20% 96%;
+
+        --primary: 220 14% 96%;
+        --primary-foreground: 224 38% 5%;
+
+        --secondary: 224 22% 12%;
+        --secondary-foreground: 220 14% 90%;
+
+        --muted: 224 20% 13%;
+        --muted-foreground: 220 9% 58%;
+
+        /* Vibrant cyan — electric tech accent */
+        --accent: 199 92% 50%;
+        --accent-foreground: 224 38% 5%;
+
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 0 0% 98%;
+
+        --border: 224 22% 13%;
+        --input: 224 20% 13%;
+        --ring: 199 92% 50%;
+        --radius: 0.85rem;
+
+        --sidebar: 224 28% 5.5%;
+        --sidebar-foreground: 220 12% 84%;
+        --sidebar-border: 224 18% 11%;
+        --sidebar-accent: 224 22% 12%;
+        --sidebar-accent-foreground: 220 14% 96%;
+    }
+
+    * {
+        border-color: hsl(var(--border));
+    }
+
+    body {
+        background-color: hsl(var(--background));
+        color: hsl(var(--foreground));
+        font-feature-settings:
+            "rlig" 1,
+            "calt" 1;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.3);
+}
+
+/* Hide scrollbar on mobile */
+@media (max-width: 768px) {
+    ::-webkit-scrollbar {
+        display: none;
+    }
+    * {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+}
+
+/* Selection styling */
+::selection {
+    background: hsl(var(--accent) / 0.25);
+    color: hsl(var(--foreground));
+}
+
+/* Kill Chrome's white/blue autofill boxes — blend them into the card surface */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill {
+    -webkit-text-fill-color: hsl(var(--foreground));
+    caret-color: hsl(var(--foreground));
+    transition: background-color 9999s ease-out 0s;
+    box-shadow: 0 0 0 1000px hsl(var(--card)) inset;
+    border-radius: inherit;
+}
+
+/* Focus visible ring */
+:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: var(--radius);
+}
+
+/* Text fields manage their own focus treatment (composer, auth inputs);
+   the global cyan outline looks broken around large rounded surfaces */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+    outline: none;
+}
+
+/* Smooth transitions for interactive elements */
+button,
+a,
+input,
+textarea {
+    transition-property:
+        color, background-color, border-color, opacity, box-shadow, transform;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+}
+
+/* Respect users who prefer reduced motion — fade only, no movement */
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* Prevent layout shift from scrollbar */
+html {
+    scrollbar-gutter: stable;
+}
+
+/* Code block styling */
+pre code {
+    display: block;
+    overflow-x: auto;
+    padding: 1rem;
+}
+
+/* ── Landing & atmosphere utilities ── */
+.bg-grid {
+    background-image:
+        linear-gradient(to right, hsl(var(--border) / 0.45) 1px, transparent 1px),
+        linear-gradient(to bottom, hsl(var(--border) / 0.45) 1px, transparent 1px);
+    background-size: 40px 40px;
+}
+.bg-grid-fade {
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 68%, transparent 100%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 68%, transparent 100%);
+    opacity: 0.55;
+}
+.glow-orb {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(64px);
+    pointer-events: none;
+    opacity: 0.9;
+}
+.glass {
+    background: hsl(var(--card) / 0.72);
+    backdrop-filter: blur(16px) saturate(1.2);
+    -webkit-backdrop-filter: blur(16px) saturate(1.2);
+    border: 1px solid hsl(var(--border) / 0.55);
+}
+.text-gradient {
+    background: linear-gradient(102deg, hsl(var(--accent)) 0%, hsl(262 83% 68%) 52%, hsl(199 92% 70%) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+@keyframes float-slow {
+    0%, 100% { transform: translate(-50%, 0px); }
+    50% { transform: translate(-50%, -12px); }
+}
+.animate-float-slow {
+    animation: float-slow 7s ease-in-out infinite;
+}
+
+/* Prose-like styling for chat markdown */
+.prose-chat {
+    line-height: 1.7;
+}
+
+.prose-chat > *:first-child {
+    margin-top: 0;
+}
+
+.prose-chat > *:last-child {
+    margin-bottom: 0;
+}
+
+/* Auth & form polish */
+.auth-input::placeholder {
+    color: hsl(var(--muted-foreground) / 0.55);
+}
+.shimmer {
+    background: linear-gradient(90deg, transparent, hsl(var(--foreground) / 0.06), transparent);
+    background-size: 200% 100%;
+}

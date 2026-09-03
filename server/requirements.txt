@@ -1,0 +1,31 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic-settings==2.7.1
+email-validator==2.2.0
+python-multipart==0.0.20
+httpx==0.27.2
+python-jose[cryptography]==3.3.0
+bcrypt==5.0.0
+numpy==1.26.4
+sentence-transformers==3.3.1
+transformers==4.46.3
+spacy==3.8.3
+pypdf==5.1.0
+python-pptx==1.0.2
+pytest==8.3.4
+pytest-asyncio==0.25.0
+asgi-lifespan==2.1.0
+tiktoken>=0.5.0
+# ── Supabase + Postgres ──
+supabase==2.10.0
+asyncpg==0.30.0
+# ── ChromaDB local PersistentClient ──
+chromadb==0.5.23
+# ── LLM structured output (NVIDIA NIM OpenAI-compatible) ──
+openai==1.54.0
+# ── Utilities ──
+tenacity==9.0.0
+# NOTE: for CPU-only hosts install torch CPU first to avoid CUDA wheels:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements.txt
+#   python -m spacy download en_core_web_sm

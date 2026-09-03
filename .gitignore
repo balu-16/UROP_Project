@@ -2,32 +2,29 @@
 
 # dependencies
 node_modules/
-/node_modules
-/frontend/node_modules/
-/.pnp
+**/node_modules/
+.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
-/.pnpm-store
+.pnpm-store
 
 # testing
 /coverage
 /.nyc_output
 
 # next.js
-/.next/
-/out/
-
-# ensure app sources are not ignored by any broad patterns
-!frontend/src/
-!frontend/public/
+.next/
+**/.next/
+out/
+**/out/
 
 # production
-/build
-/dist
+build/
+dist/
 
 # misc
 .DS_Store
@@ -48,17 +45,23 @@ yarn-error.log*
 !.env.sample
 !.env.template
 .env*.local
-backend/.env
-frontend/.env.local
+server/.env
+client/.env.local
 
 # python/backend
 __pycache__/
 *.py[cod]
 .pytest_cache/
-backend/.venv/
-/.venv/
-/venv/
-/env/
+**/.pytest_cache/
+.venv/
+venv/
+env/
+server/.venv/
+server/.cache/
+server/.hf_cache/
+server/.torch_cache/
+server/storage/
+server/storage_test/
 .tox/
 .nox/
 .coverage
@@ -68,8 +71,16 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 .pytype/
-backend/storage/
-backend/.cache/
+
+# chromadb local persistence (PersistentClient)
+.chromadb/
+.chromadb.bak_*/
+server/.chromadb/
+.chroma/
+
+# editors
+.vscode/
+.zed/
 
 # vercel
 .vercel
