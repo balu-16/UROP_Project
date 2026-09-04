@@ -2,11 +2,14 @@
 
 import { memo, useEffect, useRef, useState } from "react";
 import { Check, Pencil, X } from "lucide-react";
+import { AttachmentChip } from "@/components/composer/attachment-chip";
+import type { Attachment } from "@/types";
 
 interface UserMessageProps {
   content: string;
   messageId?: string;
   isStreaming?: boolean;
+  attachments?: Attachment[];
   onEdit?: (messageId: string, newText: string) => void;
 }
 
@@ -14,6 +17,7 @@ export const UserMessage = memo(function UserMessage({
   content,
   messageId,
   isStreaming,
+  attachments,
   onEdit,
 }: UserMessageProps) {
   const [editing, setEditing] = useState(false);
@@ -99,18 +103,28 @@ export const UserMessage = memo(function UserMessage({
           </div>
         </div>
       ) : (
-        <div className="flex max-w-[85%] items-start gap-1 sm:max-w-[70%]">
-          <button
-            type="button"
-            onClick={startEdit}
-            disabled={!canEdit}
-            aria-label="Edit and resend message"
-            className="mt-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground/35 transition-colors hover:bg-secondary hover:text-foreground/70 disabled:pointer-events-none [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
-          <div className="whitespace-pre-wrap break-words rounded-2xl rounded-br-md border border-border/60 bg-secondary px-4 py-2.5 text-[15px] leading-[1.6] text-foreground">
-            {content}
+        <div className="flex max-w-[85%] flex-col items-end gap-2 sm:max-w-[70%]">
+          {/* Attached documents — only on the message sent with them */}
+          {attachments && attachments.length > 0 && (
+            <div className="flex flex-col items-end gap-1.5">
+              {attachments.map((a) => (
+                <AttachmentChip key={a.name} name={a.name} kind={a.kind} />
+              ))}
+            </div>
+          )}
+          <div className="flex max-w-full items-start gap-1">
+            <button
+              type="button"
+              onClick={startEdit}
+              disabled={!canEdit}
+              aria-label="Edit and resend message"
+              className="mt-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground/35 transition-colors hover:bg-secondary hover:text-foreground/70 disabled:pointer-events-none [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <div className="whitespace-pre-wrap break-words rounded-2xl rounded-br-md border border-border/60 bg-secondary px-4 py-2.5 text-[15px] leading-[1.6] text-foreground">
+              {content}
+            </div>
           </div>
         </div>
       )}

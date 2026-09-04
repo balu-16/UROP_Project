@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Message } from "@/types";
+import type { Attachment, Message } from "@/types";
 import {
   getChatHistory,
   streamChat,
@@ -16,6 +16,7 @@ interface StreamBuffers {
 interface SendMessageOptions {
   reasoning?: boolean;
   sessionId?: string | null;
+  attachments?: Attachment[];
 }
 
 export function useChat(
@@ -106,6 +107,8 @@ export function useChat(
         content: trimmed,
         timestamp: new Date(),
         sessionId: sessionId || undefined,
+        attachments:
+          opts?.attachments?.length ? [...opts.attachments] : undefined,
       };
 
       const assistantId = `assistant-${Date.now()}`;

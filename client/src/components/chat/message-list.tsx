@@ -112,6 +112,7 @@ export function MessageList({
                 content={msg.content}
                 messageId={msg.id}
                 isStreaming={isStreaming}
+                attachments={msg.attachments}
                 onEdit={onEdit}
               />
             ) : (

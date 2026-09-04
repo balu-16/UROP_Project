@@ -19,7 +19,6 @@ import { SidebarFooter } from "@/components/sidebar/sidebar-footer";
 import {
   getMe,
   getSessions,
-  createSession,
   logout as apiLogout,
   getAccessToken,
 } from "@/lib/api";
@@ -127,19 +126,12 @@ export default function ChatPage() {
   }, []);
 
   const handleNewChat = useCallback(() => {
-    // Open a real chat immediately: chatting and uploading both require
-    // an active session, since documents are scoped to one chat.
+    // Don't create the session yet: ChatArea lazily creates it on first
+    // send/upload, titled from the message or filename — so the sidebar
+    // shows a real name instead of another "New chat".
     setActiveConvId(null);
+    setSearchQuery("");
     setMobileOpen(false);
-    createSession()
-      .then((session) => {
-        setActiveConvId(session._id);
-        setSessions((prev) => [session, ...prev]);
-      })
-      .catch(() => {
-        // Backend unreachable — stay without a session; send/upload
-        // will surface the error.
-      });
   }, []);
 
   const handleSelectConversation = useCallback((id: string) => {

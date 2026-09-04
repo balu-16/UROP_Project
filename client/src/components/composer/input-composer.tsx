@@ -11,8 +11,15 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { AttachmentChip, type PendingStatus } from "./attachment-chip";
 
 const ACCEPTED_TYPES = ".pdf,.txt,.md,.markdown,.pptx";
+
+export interface PendingAttachment {
+  id: string;
+  name: string;
+  status: PendingStatus;
+}
 
 interface InputComposerProps {
   onSend: (message: string, reasoning: boolean) => void;
@@ -22,6 +29,8 @@ interface InputComposerProps {
   sessionId?: string | null;
   onUploadFiles?: (files: File[]) => void;
   uploading?: boolean;
+  pending?: PendingAttachment[];
+  onRemovePending?: (id: string) => void;
 }
 
 export function InputComposer({
@@ -32,6 +41,8 @@ export function InputComposer({
   sessionId,
   onUploadFiles,
   uploading,
+  pending = [],
+  onRemovePending,
 }: InputComposerProps) {
   const [value, setValue] = useState("");
   const [deepReasoning, setDeepReasoning] = useState(true);
@@ -115,6 +126,19 @@ export function InputComposer({
 
   return (
     <div className="mx-auto w-full max-w-[768px] px-4">
+      {/* Pending attachments — files staged in the box, removable before send */}
+      {pending.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {pending.map((p) => (
+            <AttachmentChip
+              key={p.id}
+              name={p.name}
+              status={p.status}
+              onRemove={onRemovePending ? () => onRemovePending(p.id) : undefined}
+            />
+          ))}
+        </div>
+      )}
       <div
         className={cn(
           "relative flex items-end gap-1.5 rounded-[24px] border border-border bg-card px-3 py-2.5 shadow-subtle",

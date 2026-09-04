@@ -5,12 +5,21 @@ export interface RetrievalInfo {
   initial_confidence?: number;
 }
 
+export interface Attachment {
+  /** Original filename, e.g. "UG-PG Seed Grant(1).pptx" */
+  name: string;
+  /** Extension-derived kind used for the chip icon */
+  kind: "pdf" | "slides" | "text";
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
   isStreaming?: boolean;
+  /** Filenames attached to the message that sent them (user messages only). */
+  attachments?: Attachment[];
   sessionId?: string;
   selectedArm?: string;
   sources?: SourceChunk[];

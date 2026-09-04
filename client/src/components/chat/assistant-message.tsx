@@ -131,20 +131,21 @@ export const AssistantMessage = memo(function AssistantMessage({
         </div>
       )}
 
-      {content &&
-        (isStreaming ? (
-          // Plain text while streaming — avoids repeated GFM re-parses of long answers
-          <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.7] text-foreground/90">
-            {displayContent}
-            <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-foreground/50 align-[-2px]" />
-          </p>
-        ) : (
+      {content && (
+        <>
           <MarkdownRenderer
             content={displayContent}
             onCitation={handleCitation}
             activeCitation={activeCitation}
           />
-        ))}
+          {isStreaming && (
+            <span
+              className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-foreground/50 align-[-2px]"
+              aria-hidden
+            />
+          )}
+        </>
+      )}
 
       {/* Citation detail */}
       {citedSource && !isStreaming && (
