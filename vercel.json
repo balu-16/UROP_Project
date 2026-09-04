@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "buildCommand": "cd client && npm run build",
-  "outputDirectory": "client/.next",
-  "installCommand": "cd client && npm install",
-  "ignoreCommand": "git diff HEAD^ HEAD --quiet -- client/"
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
+  "ignoreCommand": "git diff HEAD^ HEAD --quiet -- ."
 }
