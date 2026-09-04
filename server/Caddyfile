@@ -1,0 +1,9 @@
+# RAGnostic backend — Caddy reverse proxy (runs on the EC2 host, not in Docker).
+# Install: sudo apt install -y caddy && sudo cp Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+# Requires: DNS ragnostic-api.duckdns.org → Elastic IP, ports 80+443 open.
+# Caddy fetches + renews the Let's Encrypt certificate automatically.
+# The FastAPI container stays on localhost-only 127.0.0.1:8000 (never exposed).
+
+ragnostic-api.duckdns.org {
+	reverse_proxy 127.0.0.1:8000
+}

@@ -212,16 +212,25 @@ class AuthService:
                 {"refresh_hash": self.hash_refresh_token(refresh_token)},
                 {"$set": {"revoked": True, "updated_at": utc_now()}},
             )
-        response.delete_cookie("refresh_token", path="/")
+        response.delete_cookie(
+            "refresh_token",
+            path="/",
+            secure=self.settings.cookie_secure,
+            samesite="none" if self.settings.cookie_secure else "lax",
+        )
         return {"ok": True}
 
     def set_refresh_cookie(self, response: Response, token: str) -> None:
+        # Cross-site production (frontend on Vercel, backend elsewhere) needs
+        # SameSite=None + Secure so browsers send the cookie with
+        # credentials:include fetches. Local HTTP dev keeps Lax (None requires
+        # Secure, which requires HTTPS). Toggle via COOKIE_SECURE=true in prod.
         response.set_cookie(
             "refresh_token",
             token,
             httponly=True,
             secure=self.settings.cookie_secure,
-            samesite="lax",
+            samesite="none" if self.settings.cookie_secure else "lax",
             max_age=self.settings.refresh_token_days * 24 * 60 * 60,
             path="/",
         )

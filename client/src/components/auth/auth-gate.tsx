@@ -99,7 +99,7 @@ export function AuthGate({ onAuthenticated }: AuthGateProps) {
       </section>
 
       {/* Right — auth card */}
-      <section className="flex w-full flex-col border-border lg:w-[480px] lg:border-l lg:bg-card/40 xl:w-[520px]">
+      <section className="flex w-full flex-col border-border lg:w-[560px] lg:border-l lg:bg-card/40 xl:w-[600px]">
         <div className="flex items-center gap-2 px-4 pt-5 lg:hidden">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-foreground">
             <LogoMark />
@@ -107,8 +107,8 @@ export function AuthGate({ onAuthenticated }: AuthGateProps) {
           <span className="text-[15px] font-semibold tracking-tight">RAGnostic</span>
         </div>
 
-        <div className="flex flex-1 items-center justify-center px-4 py-10">
-          <div className="w-full max-w-[360px]">
+        <div className="flex flex-1 items-center justify-center px-4 py-10 lg:justify-start lg:pl-14 xl:pl-16">
+          <div className="w-full max-w-[360px] lg:mr-auto">
             <div className="mb-6">
               <h2 className="text-2xl font-semibold tracking-tight">{mode === "login" ? "Welcome back" : "Create account"}</h2>
               <p className="mt-1.5 text-sm text-foreground/60">

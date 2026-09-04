@@ -10,8 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 COPY requirements.txt .
 # CPU-only torch first to avoid huge CUDA wheels on default hosts.
 # If you need CUDA, replace with the CUDA index before installing requirements.
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu || true
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --timeout 120 --retries 10 torch --index-url https://download.pytorch.org/whl/cpu || true
+RUN pip install --no-cache-dir --timeout 120 --retries 10 -r requirements.txt
 RUN python -m spacy download en_core_web_sm || true
 
 COPY . .
