@@ -115,10 +115,13 @@ class SupabaseCursor:
             self._limit = effective_limit
         # $or support for find: PostgREST builder can't express OR via chained
         # filters, so union per-branch queries in Python (branches are few).
+        # Rest-keys (non-$or) are ANDed with every branch.
         if "$or" in (self.query or {}):
+            rest = {k: v for k, v in (self.query or {}).items() if k != "$or"}
             seen: dict[str, dict[str, Any]] = {}
             for branch in self.query.get("$or", []) or []:
-                sub = SupabaseCursor(self.client, self.table, dict(branch))
+                merged = {**rest, **dict(branch)}
+                sub = SupabaseCursor(self.client, self.table, merged)
                 sub._sort_key = self._sort_key
                 sub._sort_dir = self._sort_dir
                 # Don't apply sub-limit per branch; slice at the end
@@ -175,16 +178,15 @@ class SupabaseCollection:
 
     async def find_one(self, query: dict[str, Any]):
         try:
-            # $or for find_one: try branches in order, return first hit
+            # $or for find_one: try branches in order, each ANDed with
+            # rest-keys, return first hit.
             if query and "$or" in query:
+                rest = {k: v for k, v in query.items() if k != "$or"}
                 for branch in query.get("$or", []) or []:
-                    got = await self.find_one(dict(branch))
+                    merged = {**rest, **dict(branch)}
+                    got = await self.find_one(merged)
                     if got:
                         return got
-                # Also consider non-$or keys alongside $or
-                rest = {k: v for k, v in query.items() if k != "$or"}
-                if rest:
-                    return await self.find_one(rest)
                 return None
             q = self.client.table(self.table).select("*")
             q = _apply_query_filters(q, query)
@@ -202,6 +204,26 @@ class SupabaseCollection:
 
     async def update_one(self, query: dict[str, Any], update: dict[str, Any], upsert: bool = False):
         from app.database.memory import UpdateResult
+
+        # $or cannot be expressed as a single PostgREST AND filter: resolve to a
+        # concrete row first (honoring rest-keys), then update by that row's key.
+        if query and "$or" in query:
+            existing = await self.find_one(query)
+            if not existing:
+                if upsert:
+                    new_doc = {k: v for k, v in query.items() if k != "$or"}
+                    set_payload: dict[str, Any] = {}
+                    if "$set" in update:
+                        for k, v in update["$set"].items():
+                            set_payload[k.split(".")[-1] if "." in k else k] = _to_iso(v)
+                    new_doc.update(set_payload)
+                    await self.insert_one(new_doc)
+                    return UpdateResult(0, 1)
+                return UpdateResult(0, 0)
+            key = {"_id": existing["_id"]} if "_id" in existing else {"id": existing["id"]} if "id" in existing else None
+            if key is None:
+                return UpdateResult(0, 0)
+            return await self.update_one(key, update, upsert=False)
 
         # Build $set payload
         set_payload: dict[str, Any] = {}
@@ -233,6 +255,10 @@ class SupabaseCollection:
                 return UpdateResult(1, 0)
             return UpdateResult(0, 0)
 
+        if not query:
+            # Guard: never run an unfiltered update (would touch every row).
+            logger.error("Supabase update_one refused: empty query on %s", self.table)
+            raise ValueError("update_one requires a non-empty query filter")
         try:
             # Build filtered update query
             q = self.client.table(self.table).update(set_payload)
@@ -259,6 +285,19 @@ class SupabaseCollection:
         from app.database.memory import DeleteResult
 
         try:
+            # $or cannot be a single PostgREST filter: resolve first, delete by key.
+            if query and "$or" in query:
+                existing = await self.find_one(query)
+                if not existing:
+                    return DeleteResult(0)
+                key = {"_id": existing["_id"]} if "_id" in existing else {"id": existing["id"]} if "id" in existing else None
+                if key is None:
+                    return DeleteResult(0)
+                return await self.delete_one(key)
+            if not query:
+                # Guard: never run an unfiltered delete (would wipe the table).
+                logger.error("Supabase delete_one refused: empty query on %s", self.table)
+                return DeleteResult(0)
             # Need to fetch first to know if exists for count, then delete
             existing = await self.find_one(query)
             if not existing:
@@ -277,13 +316,19 @@ class SupabaseCollection:
     async def delete_many(self, query: dict[str, Any]):
         from app.database.memory import DeleteResult
 
+        if not query:
+            # Guard: never run an unfiltered mass delete.
+            logger.error("Supabase delete_many refused: empty query on %s", self.table)
+            return DeleteResult(0)
         try:
-            # Handle $or specially: delete where any subquery matches
+            # Handle $or specially: delete where any subquery matches ANDed with rest.
             if "$or" in query:
+                rest = {k: v for k, v in query.items() if k != "$or"}
                 total = 0
                 for sub in query["$or"]:
+                    merged = {**rest, **sub}
                     q = self.client.table(self.table).delete()
-                    q = _apply_query_filters(q, sub)
+                    q = _apply_query_filters(q, merged)
                     res = q.execute()
                     total += len(res.data) if res.data else 0
                 return DeleteResult(total)

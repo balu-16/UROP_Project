@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { MessageCircleQuestion, X } from "lucide-react";
 import { MessageActions } from "./message-actions";
 import { ThinkingPanel } from "./thinking-panel";
-import type { SourceChunk } from "@/types";
+import type { RetrievalInfo, SourceChunk } from "@/types";
 
 // Markdown parsing + highlight.js are heavy — load them only when needed
 const MarkdownRenderer = dynamic(
@@ -27,7 +27,7 @@ interface AssistantMessageProps {
   stage?: string;
   followUps?: string[];
   onFollowUp?: (question: string) => void;
-  retrieval?: { depth?: number; confidence?: number; strategy?: string; initial_confidence?: number };
+  retrieval?: RetrievalInfo;
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -206,6 +206,13 @@ export const AssistantMessage = memo(function AssistantMessage({
           {retrieval && typeof retrieval.depth === "number" && (
             <span className="rounded-md border border-border bg-card px-2 py-1">
               {retrieval.depth}-hop · {typeof retrieval.confidence === "number" ? retrieval.confidence.toFixed(2) : "--"} · {retrieval.strategy || (retrieval.depth===0?"ZERO_HOP":retrieval.depth===1?"ONE_HOP":"TWO_HOP")}
+              {retrieval.retrieval_mode ? ` · ${retrieval.retrieval_mode}` : ""}
+              {typeof retrieval.candidate_count === "number" && typeof retrieval.reranked_count === "number" && retrieval.reranked_count > 0
+                ? ` · ${retrieval.candidate_count}→top ${retrieval.reranked_count}`
+                : typeof retrieval.reranked_count === "number" && retrieval.reranked_count > 0
+                  ? ` · top ${retrieval.reranked_count}`
+                  : ""}
+              {retrieval.reranker_model ? ` · ${String(retrieval.reranker_model).split("/").pop()}` : ""}
             </span>
           )}
           {!retrieval?.strategy && selectedArm && (

@@ -1,14 +1,17 @@
 {
   "pythonVersion": "3.11",
-  "include": ["backend"],
+  "include": ["server/app", "server/tests", "server/main.py"],
   "exclude": [
-    "backend/.venv",
-    "backend/.pytest_cache",
-    "backend/storage_test",
-    "frontend",
+    "server/.venv",
+    "server/.pytest_cache",
+    "server/storage_test",
+    "server/.cache",
+    "server/.hf_cache",
+    "server/.torch_cache",
+    "client",
     "**/__pycache__"
   ],
-  "extraPaths": ["backend"],
+  "extraPaths": ["server"],
   "typeCheckingMode": "basic",
   "reportMissingImports": "none",
   "reportMissingModuleSource": "none",

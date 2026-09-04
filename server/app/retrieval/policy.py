@@ -42,6 +42,14 @@ class ThresholdRetrievalPolicy:
     Step 3: if confidence >= HIGH_THRESHOLD → 0-hop else 1-hop
     Step 4: evaluate after 1-hop; if confidence >= HIGH_THRESHOLD → stay 1-hop else 2-hop (if allowed)
     Max hops = MAX_HOPS (default 2)
+
+    KNOWN QUIRK (preserved by design, see thinking.md §2): with defaults,
+    terminal 1-hop is currently unreachable. Entering expansion requires
+    initial_conf < 0.75, and post-expansion confidence is
+    max(<0.75 seeds, 0.55 graph default), so decide_after_one_hop always
+    falls to TWO_HOP when max_hops=2. Preserved as-is; recalibrate thresholds
+    only after telemetry, per paused-calibration plan. Tests pin 0→1→2.
+    NOTE: low_threshold is reserved/unused (single-threshold policy on high).
     """
 
     def __init__(self, settings: Settings):
@@ -68,6 +76,9 @@ class ThresholdRetrievalPolicy:
         )
 
     def decide_after_one_hop(self, confidence: float, previous_confidence: float) -> RetrievalDecision:
+        # NOTE: previous_confidence is reserved for future margin/coverage logic;
+        # current single-threshold policy decides on post-expansion confidence only.
+        _ = previous_confidence
         if confidence >= self.high:
             return RetrievalDecision(
                 depth=RetrievalDepth.ONE_HOP,

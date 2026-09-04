@@ -98,17 +98,27 @@ class AppDatabase:
 
                     from pathlib import Path
 
-                    sql_path = Path(__file__).resolve().parents[2] / "supabase" / "migrations" / "001_initial.sql"
-                    alt_path = Path(__file__).resolve().parents[3] / "supabase" / "migrations" / "001_initial.sql"
-                    sql_file = sql_path if sql_path.exists() else alt_path
-                    if sql_file.exists():
+                    candidates = [
+                        "001_initial.sql",
+                        "002_fts_keyword.sql",
+                        "003_retrieval_column.sql",
+                    ]
+                    sql_files: list = []
+                    for name in candidates:
+                        sql_path = Path(__file__).resolve().parents[2] / "supabase" / "migrations" / name
+                        alt_path = Path(__file__).resolve().parents[3] / "supabase" / "migrations" / name
+                        sql_file = sql_path if sql_path.exists() else alt_path
+                        if sql_file.exists():
+                            sql_files.append(sql_file)
+                    if sql_files:
                         dsn = self.settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
                         try:
                             conn = await asyncio.wait_for(asyncpg.connect(dsn), timeout=5.0)
                             try:
-                                sql = sql_file.read_text()
-                                await asyncio.wait_for(conn.execute(sql), timeout=10.0)
-                                logger.info("Supabase migrations applied from %s", sql_file)
+                                for sql_file in sql_files:
+                                    sql = sql_file.read_text()
+                                    await asyncio.wait_for(conn.execute(sql), timeout=10.0)
+                                    logger.info("Supabase migrations applied from %s", sql_file)
                             finally:
                                 await conn.close()
                         except asyncio.TimeoutError:

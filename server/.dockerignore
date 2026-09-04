@@ -6,3 +6,14 @@ storage_test/
 .chromadb/
 .pytest_cache/
 .git/
+# Secrets must never bake into the image (ECR would publish them).
+# Production .env lives only on EC2 and is injected with --env-file.
+.env
+.env.*
+*.pem
+*.key
+*.crt
+# Local model/download caches (freshly fetched at build/boot instead).
+.hf_cache/
+.torch_cache/
+.cache/

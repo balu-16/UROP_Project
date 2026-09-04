@@ -56,7 +56,9 @@ Base URL = `NEXT_PUBLIC_API_BASE_URL`.
 | `POST` | `/sessions` | `{title?}` | `BackendSession` (lazy-created on first send) |
 | `POST` | `/sessions/:id/truncate` | `{message_id}` | `{ok, deleted}` (edit-and-resend branch cut) |
 | `GET` | `/chat-history/:sessionId` | — | `{session, messages[]}` mapped to `Message[]` |
-| `POST` | `/index-documents` | multipart `files` + `session_id` | `{chunk_count, documents?}` (max 20 files, 25MB each; `.pdf/.txt/.md/.markdown/.pptx`) |
+| `POST` | `/index-documents` | multipart `files` + `session_id` | `{chunk_count, documents: [{_id, filename}]}` (max 20 files, 25MB each; `.pdf/.txt/.md/.markdown/.pptx`; `_id` drives un-upload) |
+| `GET` | `/documents?session_id=…` | — | `{documents: [{_id, filename, chunk_count}]}` (server truth for strip; localStorage is cache) |
+| `DELETE` | `/documents/:id?session_id=…` | — | `{ok, deleted}` (un-upload: chunks, vectors, graph links; repeat → 404) |
 | `POST` | `/feedback` | `{session_id, message_id, rating, comment?}` | `{ok}` (best-effort) |
 | `GET` | `/health` | — | polled every 30s by `ConnectionDot` |
 
@@ -66,7 +68,7 @@ Chat is `POST /chat` (`{message, session_id, reasoning}`) streaming
 | Event | Payload | UI effect |
 |---|---|---|
 | `stage` | `{stage: starting\|retrieving\|thinking\|writing}` | status line before first token |
-| `metadata` | `{session_id, retrieval{depth,confidence,strategy}, sources[]}` | retrieval badge + sources |
+| `metadata` | `{session_id, retrieval{depth,confidence,strategy,retrieval_mode,candidate_count,reranked_count,reranker_model}, sources[]}` | retrieval badge (`· top N`) + sources |
 | `token` | `{delta}` | appended to 80ms-batched buffer (`use-chat.ts`) |
 | `reasoning` | `{reasoning}` | `ThinkingPanel` (auto-opens while active) |
 | `reward` | `{reward, latency_ms}` | mono metadata row |
@@ -84,25 +86,36 @@ src/
 │   ├── chat/page.tsx       # boot (getMe → sessions), desktop sidebar + mobile drawer
 │   └── globals.css         # midnight tokens, thin scrollbars, .offscreen-msg, .shadow-subtle
 ├── components/
-│   ├── chat/               # chat-area, message-list, user/assistant-message,
+│   ├── chat/               # chat-area (pending attachments, session docs strip, lazy titled sessions),
+│   │                       # message-list, user/assistant-message (attachment chips, live markdown),
 │   │                       # markdown-renderer (dynamic ssr:false), thinking-panel,
 │   │                       # message-actions, empty-state, typing-indicator, connection-dot
-│   ├── composer/           # input-composer (pill 24px, Fast/Deep segmented, debounced drafts),
+│   ├── composer/           # input-composer (pill 24px, Fast/Deep segmented, debounced drafts, pending chips),
+│   │                       # attachment-chip (PDF/slides/doc icons, indexing status, ×),
 │   │                       # suggestion-chips (Lucide grid, no emoji)
 │   ├── sidebar/            # sidebar (x-transform drawer), header/nav/search/conversations/footer
 │   ├── auth/auth-gate.tsx  # split branding + form, min-h-dvh, 16px inputs (no iOS zoom)
 │   └── ui/                 # Radix dialog/dropdown/tooltip, button (ghost→secondary hover), toast
 ├── hooks/use-chat.ts       # SSE buffers + rAF flush, abort/stop, editAndResend, regenerate
 ├── hooks/use-keyboard.ts   # sidebar toggle + focus-composer shortcuts (⌘K in search)
-├── lib/api.ts              # TOKEN_KEY, singleflight refresh, authFetch 401→refresh→retry
+├── lib/api.ts              # TOKEN_KEY, singleflight refresh, authFetch 401→refresh→retry, upload/listDocuments/deleteDocument
+├── lib/title.ts            # deriveTitle (first message) / titleForFilename (upload-first chats)
 └── lib/motion.ts           # shared presets (durations micro 0.15 / base 0.25 / entrance 0.4)
 ```
 
-State flow: `InputComposer.onSend → useChat.sendMessage → streamChat onEvent →
-buffersRef → scheduleFlush(80ms) → MessageList rAF scrollTo (only if pinned) →
-AssistantMessage plain-text while streaming → MarkdownRenderer on done`.
+State flow: attach/drop → pending chips (indexing immediately) → send snapshots
+`attachments` onto the user message → `InputComposer.onSend → useChat.sendMessage
+→ streamChat onEvent → buffersRef → scheduleFlush(80ms) → MessageList rAF
+scrollTo (only if pinned) → AssistantMessage renders MarkdownRenderer live
+(throttled 150ms, no raw-markdown flash).
 
-Drafts persist per session (`ragnostic_draft_<sessionId|new>`, 300ms debounce).
+Sessions lazy-create on first send/upload, titled from the message or filename
+(no more "New chat" walls). Drafts persist per session
+(`ragnostic_draft_<sessionId|new>`, 300ms debounce); indexed filenames persist
+per session (`ragnostic_docs_<sessionId>`) for the docs strip; per-message
+chips are live-session only (history rows carry no attachments). Ingested-chip
+× → confirm → `DELETE /documents/:id` → chip removed on success, restored on
+failure; pending-chip × detaches instantly with no API call.
 
 ## Styling / motion conventions
 
@@ -114,7 +127,7 @@ Drafts persist per session (`ragnostic_draft_<sessionId|new>`, 300ms debounce).
 
 ## Performance notes
 
-- `MessageList` windows to last 60 (`WINDOW_SIZE`); rows are `React.memo` + `content-visibility:auto` (`.offscreen-msg`); streaming renders plain text, full GFM only on `done` (throttled 150ms).
+- `MessageList` windows to last 60 (`WINDOW_SIZE`); rows are `React.memo` + `content-visibility:auto` (`.offscreen-msg`); streaming renders MarkdownRenderer live on throttled content (150ms).
 - `MarkdownRenderer` is `next/dynamic ssr:false` with a skeleton fallback; `highlight.js` `github-dark.css` is overridden to `bg-secondary/60` so code matches the theme.
 - `next.config.ts`: `compress`, `optimizePackageImports: [lucide-react, framer-motion]`, production `removeConsole`.
 - Sidebar search uses `useDeferredValue`; composer drafts debounce `localStorage`; `ConnectionDot` polls `/health` every 30s (4s timeout).
@@ -132,6 +145,7 @@ Drafts persist per session (`ragnostic_draft_<sessionId|new>`, 300ms debounce).
 |---|---|---|
 | `Could not open a chat — is the backend running?` | `POST /sessions` failed (CORS/backend down) | Check `NEXT_PUBLIC_API_BASE_URL`, `server/.env` `FRONTEND_ORIGIN` |
 | `Uploaded N files but 0 chunks indexed` | Empty/unparseable files | Re-export PDFs with selectable text; stick to supported extensions |
+| Un-upload × fails / 404 | Backend image predates `DELETE /documents` or wrong chat | Redeploy backend `:1.0.1+`; `session_id` must match the uploading chat |
 | Stream stalls in background tab | `requestAnimationFrame` throttled | Buffers flush via `setTimeout(80ms)` fallback — switch back to tab; content finalizes on `done` |
 | Draft from another chat appears | `sessionId` null at mount | Draft key is `ragnostic_draft_new` until the lazy session resolves — expected |
 | `Jump to latest` stuck visible | Unpinned (`distance > 400`) | Click it or scroll to bottom; auto-scroll resumes only while pinned |

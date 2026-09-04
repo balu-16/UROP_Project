@@ -164,6 +164,45 @@ class PGGraphStore:
                 self._graph_edges.setdefault(left, set()).add(right)
                 self._graph_edges.setdefault(right, set()).add(left)
 
+    def remove_chunks(self, chunk_ids: list[str]) -> dict[str, int]:
+        """Prune in-memory graph structures for deleted chunks.
+
+        PG mode needs no action here (collections + cascades own truth);
+        memory mode stores edges only in these dicts, so explicit cleanup is
+        required or deletes leak across docs/users. Best-effort, never raises.
+        Returns counts for telemetry.
+        """
+        removed_links = 0
+        pruned_entities = 0
+        pruned_edges = 0
+        try:
+            targets = set(chunk_ids or [])
+            if not targets:
+                return {"links": 0, "entities": 0, "edges": 0}
+            # Detach chunks from entities
+            for cid in list(targets):
+                ents = self._chunk_to_entities.pop(cid, set())
+                for ent in ents:
+                    s = self._entity_to_chunks.get(ent)
+                    if s is not None:
+                        s.discard(cid)
+                        removed_links += 1
+            # Prune entities with no chunk refs left (shared entities survive)
+            for ent in list(self._entity_to_chunks.keys()):
+                if not self._entity_to_chunks.get(ent):
+                    # Remove incident edges
+                    neighbors = self._graph_edges.pop(ent, set())
+                    pruned_edges += len(neighbors)
+                    for other in neighbors:
+                        adj = self._graph_edges.get(other)
+                        if adj is not None:
+                            adj.discard(ent)
+                    del self._entity_to_chunks[ent]
+                    pruned_entities += 1
+        except Exception:
+            pass
+        return {"links": removed_links, "entities": pruned_entities, "edges": pruned_edges}
+
     async def expand_chunks(
         self,
         seed_chunk_ids: list[str],
@@ -211,7 +250,7 @@ class PGGraphStore:
 
             if not chunk_uuids:
                 # No PG chunks yet (maybe ingestion hasn't committed), fallback to memory
-                return self._expand_memory(seed_chunk_ids, hops, max_entities, max_chunks)
+                return self._expand_memory(seed_chunk_ids, hops, max_entities, max_chunks, allowed_chunk_ids)
 
             # Get seed entity ids
             seed_entity_ids: set[str] = set()
@@ -221,7 +260,7 @@ class PGGraphStore:
                     seed_entity_ids.add(row["entity_id"])
             except Exception as exc:
                 logger.debug("PG seed entities fetch failed: %s", exc)
-                return self._expand_memory(seed_chunk_ids, hops, max_entities, max_chunks)
+                return self._expand_memory(seed_chunk_ids, hops, max_entities, max_chunks, allowed_chunk_ids)
 
             if not seed_entity_ids:
                 return {"chunk_ids": list(seed_chunk_ids), "seed_entities": [], "expanded_entities": [], "hops": hops}
@@ -230,7 +269,7 @@ class PGGraphStore:
             # Resolve entity names for return value (optional)
             seed_entity_names = set()
             try:
-                nres = supa.table("entities").select("id,name").in_("id", list(seed_entity_ids)[:max_entities]).execute()
+                nres = supa.table("entities").select("id,name").in_("id", sorted(seed_entity_ids)[:max_entities]).execute()
                 for row in nres.data or []:
                     seed_entity_names.add(row["name"])
             except Exception:
@@ -242,7 +281,7 @@ class PGGraphStore:
                 if not frontier:
                     break
                 # Batch fetch relationships where source in frontier
-                frontier_list = list(frontier)[:max_entities]
+                frontier_list = sorted(frontier)[:max_entities]
                 next_frontier: set[str] = set()
                 try:
                     # Query both directions: source in frontier OR target in frontier (undirected)
@@ -262,7 +301,7 @@ class PGGraphStore:
                 # Respect max_entities overall
                 if len(visited) + len(next_frontier) > max_entities:
                     # trim
-                    next_frontier = set(list(next_frontier)[: max_entities - len(visited)])
+                    next_frontier = set(sorted(next_frontier)[: max_entities - len(visited)])
                 visited.update(next_frontier)
                 frontier = next_frontier
                 if len(visited) >= max_entities:
@@ -273,12 +312,12 @@ class PGGraphStore:
             if visited:
                 try:
                     # Get chunk uuids for visited entities
-                    c2 = supa.table("chunk_entities").select("chunk_id").in_("entity_id", list(visited)).execute()
+                    c2 = supa.table("chunk_entities").select("chunk_id").in_("entity_id", sorted(visited)).execute()
                     chunk_uuid_set = {row["chunk_id"] for row in c2.data or []}
                     if chunk_uuid_set:
                         # Need to map back to chunk_id strings (ULIDs)
                         # Already have uuid -> chunk_id mapping limited; fetch all
-                        cres2 = supa.table("chunks").select("chunk_id").in_("id", list(chunk_uuid_set)[:max_chunks]).execute()
+                        cres2 = supa.table("chunks").select("chunk_id").in_("id", sorted(chunk_uuid_set)[:max_chunks]).execute()
                         for row in cres2.data or []:
                             chunk_ids.add(row["chunk_id"])
                             if len(chunk_ids) >= max_chunks:
@@ -290,8 +329,9 @@ class PGGraphStore:
                         # memory fallback lookup would need entity name; skip
                         pass
 
-            # Limit (session allow-list applied: only this chat's chunks leave the graph)
-            chunk_list = list(chunk_ids)[:max_chunks]
+            # Limit (session allow-list applied: only this chat's chunks leave the graph).
+            # Sorted for deterministic output across runs (set order is hash-randomized).
+            chunk_list = sorted(chunk_ids)[:max_chunks]
             if allowed_chunk_ids is not None:
                 seeds = set(seed_chunk_ids)
                 chunk_list = [cid for cid in chunk_list if cid in allowed_chunk_ids or cid in seeds][:max_chunks]
@@ -312,7 +352,7 @@ class PGGraphStore:
             }
         except Exception as exc:
             logger.exception("PGGraphStore expand_chunks PG failed, fallback to memory: %s", exc)
-            return self._expand_memory(seed_chunk_ids, hops, max_entities, max_chunks)
+            return self._expand_memory(seed_chunk_ids, hops, max_entities, max_chunks, allowed_chunk_ids)
 
     def _expand_memory(self, seed_chunk_ids: list[str], hops: int, max_entities: int, max_chunks: int, allowed_chunk_ids: set[str] | None = None) -> dict[str, Any]:
         seed_entities: set[str] = set()
@@ -322,7 +362,7 @@ class PGGraphStore:
         frontier = set(seed_entities)
         for _ in range(hops):
             next_frontier: set[str] = set()
-            for ent in list(frontier)[:max_entities]:
+            for ent in sorted(frontier)[:max_entities]:
                 next_frontier.update(self._graph_edges.get(ent, set()))
             next_frontier -= visited
             visited.update(next_frontier)
@@ -330,7 +370,7 @@ class PGGraphStore:
             if not frontier:
                 break
         chunk_ids: set[str] = set(seed_chunk_ids)
-        for ent in visited:
+        for ent in sorted(visited):
             chunk_ids.update(self._entity_to_chunks.get(ent, set()))
             if len(chunk_ids) >= max_chunks:
                 break
@@ -338,9 +378,9 @@ class PGGraphStore:
             seeds = set(seed_chunk_ids)
             chunk_ids = {cid for cid in chunk_ids if cid in allowed_chunk_ids or cid in seeds}
         return {
-            "chunk_ids": list(chunk_ids)[:max_chunks],
-            "seed_entities": list(seed_entities),
-            "expanded_entities": list(visited),
+            "chunk_ids": sorted(chunk_ids)[:max_chunks],
+            "seed_entities": sorted(seed_entities),
+            "expanded_entities": sorted(visited),
             "hops": hops,
         }
 

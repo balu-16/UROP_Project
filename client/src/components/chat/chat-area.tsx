@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { FileText, PanelLeft, UploadCloud } from "lucide-react";
+import { FileText, PanelLeft, UploadCloud, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { EmptyState } from "./empty-state";
@@ -14,7 +14,7 @@ import { ConnectionDot } from "./connection-dot";
 import { kindForFilename, type PendingStatus } from "@/components/composer/attachment-chip";
 import { useChat } from "@/hooks/use-chat";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard";
-import { uploadFiles, createSession } from "@/lib/api";
+import { deleteDocument, uploadFiles, createSession, listDocuments } from "@/lib/api";
 import { deriveTitle, titleForFilename } from "@/lib/title";
 import type { Attachment } from "@/types";
 
@@ -33,12 +33,45 @@ interface PendingFile {
   name: string;
   file: File;
   status: PendingStatus;
+  /** Backend document _id once indexed (enables un-upload via DELETE). */
+  documentId?: string;
+}
+
+interface SessionDoc {
+  name: string;
+  documentId?: string;
 }
 
 const docsKey = (sessionId: string | null) => `ragnostic_docs_${sessionId || "new"}`;
 
 function toComposerPending(pending: PendingFile[]): PendingAttachment[] {
-  return pending.map((p) => ({ id: p.id, name: p.name, status: p.status }));
+  return pending.map((p) => ({
+    id: p.id,
+    name: p.name,
+    status: p.status,
+    ...(p.documentId ? { documentId: p.documentId } : {}),
+  }));
+}
+
+function parseSessionDocs(raw: string | null): SessionDoc[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((d): SessionDoc[] => {
+      if (typeof d === "string") return [{ name: d }]; // legacy shape
+      if (d && typeof d === "object" && typeof (d as { name?: unknown }).name === "string") {
+        const doc = d as { name: string; documentId?: unknown };
+        return [{
+          name: doc.name,
+          ...(typeof doc.documentId === "string" ? { documentId: doc.documentId } : {}),
+        }];
+      }
+      return [];
+    });
+  } catch {
+    return [];
+  }
 }
 
 export function ChatArea({
@@ -54,28 +87,56 @@ export function ChatArea({
       toast(msg, "error"),
     );
   const [pending, setPending] = useState<PendingFile[]>([]);
-  const [sessionDocs, setSessionDocs] = useState<string[]>([]);
+  const [sessionDocs, setSessionDocs] = useState<SessionDoc[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const dragDepthRef = useRef(0);
+  // Tracks the currently displayed session so late upload completions for a
+  // previous chat write that chat's cache key without overwriting the live strip.
+  const activeSessionRef = useRef(activeSessionId);
+  activeSessionRef.current = activeSessionId;
 
   const hasMessages = messages.length > 0;
   const indexing = pending.some((p) => p.status === "indexing");
 
-  /* Indexed-document names for this chat (survive reloads; per-message
-     chips are live-session only since history rows carry no attachments). */
+  /* Indexed documents for this chat: server truth wins, localStorage is the
+     offline cache (survives reloads; per-message chips stay live-session
+     only since history rows carry no attachments). */
   useEffect(() => {
     if (!activeSessionId) {
       setSessionDocs([]);
       setPending([]);
       return;
     }
+    const sessionId = activeSessionId;
+    let cancelled = false;
     try {
-      const raw = window.localStorage.getItem(docsKey(activeSessionId));
-      const parsed: unknown = raw ? JSON.parse(raw) : [];
-      setSessionDocs(Array.isArray(parsed) ? parsed.filter((d): d is string => typeof d === "string") : []);
+      setSessionDocs(parseSessionDocs(window.localStorage.getItem(docsKey(sessionId))));
     } catch {
       setSessionDocs([]);
     }
+    void (async () => {
+      try {
+        const serverDocs = await listDocuments(sessionId);
+        if (cancelled) return;
+        const next = serverDocs
+          .map((d) => ({
+            name: String(d.filename || d._id),
+            documentId: String(d._id),
+          }))
+          .filter((d) => d.documentId);
+        setSessionDocs(next);
+        try {
+          window.localStorage.setItem(docsKey(sessionId), JSON.stringify(next));
+        } catch {
+          // storage unavailable — strip simply won't persist
+        }
+      } catch {
+        // offline/backend down: keep localStorage cache
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [activeSessionId]);
 
   /* Focus management for keyboard shortcut */
@@ -126,11 +187,73 @@ export function ChatArea({
     void handleSend(text, true);
   };
 
-  const handleRemovePending = useCallback((id: string) => {
-    // Detaching only removes the chip: chunks already indexed stay searchable
-    // (the backend has no document-delete endpoint).
-    setPending((prev) => prev.filter((p) => p.id !== id));
-  }, []);
+  /* Un-upload: DELETE an ingested document, then drop its UI traces. */
+  const unuploadDocument = useCallback(
+    async (documentId: string, filename: string): Promise<boolean> => {
+      if (!activeSessionId) return false;
+      if (
+        !window.confirm(
+          `Remove "${filename}" from this chat? Its chunks and index entries will be deleted.`,
+        )
+      ) {
+        return false;
+      }
+      try {
+        await deleteDocument(documentId, activeSessionId);
+        setSessionDocs((prev) => {
+          const next = prev.filter((d) => d.documentId !== documentId);
+          try {
+            window.localStorage.setItem(docsKey(activeSessionId), JSON.stringify(next));
+          } catch {
+            // storage unavailable — strip simply won't persist
+          }
+          return next;
+        });
+        toast(`Removed ${filename} from this chat.`, "success");
+        return true;
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "Could not remove document", "error");
+        return false;
+      }
+    },
+    [activeSessionId, toast],
+  );
+
+  const handleRemovePending = useCallback(
+    (id: string) => {
+      const item = pending.find((p) => p.id === id);
+      if (!item) return;
+      if (item.documentId && item.status === "ready") {
+        // Already ingested: delete on the backend first, drop the chip only
+        // on success (rollback to ready on failure).
+        setPending((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, status: "deleting" as const } : p)),
+        );
+        void (async () => {
+          const ok = await unuploadDocument(item.documentId as string, item.name);
+          if (ok) {
+            setPending((prev) => prev.filter((p) => p.id !== id));
+          } else {
+            setPending((prev) =>
+              prev.map((p) => (p.id === id ? { ...p, status: "ready" as const } : p)),
+            );
+          }
+        })();
+        return;
+      }
+      // Local-only (indexing/failed/never-uploaded): detach instantly, no API call.
+      setPending((prev) => prev.filter((p) => p.id !== id));
+    },
+    [pending, unuploadDocument],
+  );
+
+  const handleRemoveSessionDoc = useCallback(
+    (documentId: string | undefined, filename: string) => {
+      if (!documentId) return;
+      void unuploadDocument(documentId, filename);
+    },
+    [unuploadDocument],
+  );
 
   const handleUpload = useCallback(
     async (files: File[]) => {
@@ -166,25 +289,72 @@ export function ChatArea({
       setPending((prev) => [...prev, ...batch]);
       try {
         const result = await uploadFiles(accepted, targetSessionId);
-        const docs = (result as { documents?: { filename?: string; metadata?: { source?: string } }[] })
-          ?.documents;
-        const names =
-          Array.isArray(docs) && docs.length
-            ? docs
-                .map((d) => String(d?.filename || d?.metadata?.source || ""))
-                .filter(Boolean)
-            : accepted.map((f) => f.name);
+        const docs = result.documents;
+        // Match uploads to IDs by _id, not by filename: duplicate filenames in
+        // one batch would collide in a Map<filename,_id> (last wins, wrong ID).
+        // Backend returns documents in upload order, so zip by index when the
+        // counts match; otherwise fall back to per-filename queues.
+        let docIds: (string | undefined)[];
+        let names: string[];
+        if (Array.isArray(docs) && docs.length === accepted.length) {
+          docIds = docs.map((d) => (d?._id ? String(d._id) : undefined));
+          names = accepted.map((f) => f.name);
+        } else if (Array.isArray(docs) && docs.length) {
+          const queueByName = new Map<string, string[]>();
+          for (const d of docs) {
+            const name = String(d?.filename || d?.metadata?.source || "");
+            const docId = d?._id ? String(d._id) : "";
+            if (!name || !docId) continue;
+            const q = queueByName.get(name) || [];
+            q.push(docId);
+            queueByName.set(name, q);
+          }
+          docIds = accepted.map((f) => queueByName.get(f.name)?.shift());
+          names = accepted.map((f) => f.name);
+        } else {
+          docIds = accepted.map(() => undefined);
+          names = accepted.map((f) => f.name);
+        }
+        const idByBatchIndex = new Map<string, string>();
+        batch.forEach((b, i) => {
+          const docId = docIds[i];
+          if (docId) idByBatchIndex.set(b.id, docId);
+        });
         setPending((prev) =>
-          prev.map((p) => (batchIds.has(p.id) ? { ...p, status: "ready" as const } : p)),
+          prev.map((p) => {
+            if (!batchIds.has(p.id)) return p;
+            const docId = idByBatchIndex.get(p.id);
+            // Files with no ID produced zero chunks: surface as error so the
+            // chip stays removable and no unremovable strip entry is created.
+            if (!docId) return { ...p, status: "error" as const };
+            return { ...p, status: "ready" as const, documentId: docId };
+          }),
         );
+        // Always persist to the upload target's cache key; only touch live
+        // strip state when the user is still viewing that chat.
+        try {
+          const cached = parseSessionDocs(window.localStorage.getItem(docsKey(targetSessionId)));
+          names.forEach((n, i) => {
+            const docId = docIds[i];
+            if (!docId) return;
+            if (!cached.some((d) => d.documentId === docId)) {
+              cached.push({ name: n, documentId: docId });
+            }
+          });
+          window.localStorage.setItem(docsKey(targetSessionId), JSON.stringify(cached));
+        } catch {
+          // storage unavailable — strip simply won't persist
+        }
+        if (activeSessionRef.current !== targetSessionId) return;
         setSessionDocs((prev) => {
           const merged = [...prev];
-          for (const n of names) if (!merged.includes(n)) merged.push(n);
-          try {
-            window.localStorage.setItem(docsKey(targetSessionId), JSON.stringify(merged));
-          } catch {
-            // storage unavailable — strip simply won't persist
-          }
+          names.forEach((n, i) => {
+            const docId = docIds[i];
+            if (!docId) return;
+            if (!merged.some((d) => d.documentId === docId)) {
+              merged.push({ name: n, documentId: docId });
+            }
+          });
           return merged;
         });
         const chunks =
@@ -305,20 +475,30 @@ export function ChatArea({
           </div>
         )}
 
-        {/* Documents indexed in this chat */}
+        {/* Documents indexed in this chat (× un-uploads where tracked) */}
         {sessionDocs.length > 0 && (
-          <div className="mb-2 flex justify-center px-4">
-            <span
-              title={sessionDocs.join("\n")}
-              className="inline-flex max-w-full items-center gap-1.5 truncate rounded-full border border-border bg-card px-3 py-1 text-[11px] text-foreground/55"
-            >
-              <FileText className="h-3 w-3 shrink-0" />
-              <span className="truncate">
-                {sessionDocs.length} document{sessionDocs.length === 1 ? "" : "s"} in this chat ·{" "}
-                {sessionDocs.slice(0, 2).join(", ")}
-                {sessionDocs.length > 2 ? ` +${sessionDocs.length - 2} more` : ""}
+          <div className="mb-2 flex flex-wrap justify-center gap-1.5 px-4">
+            {sessionDocs.map((doc) => (
+              <span
+                key={`${doc.documentId || doc.name}`}
+                title={doc.name}
+                className="inline-flex max-w-[220px] items-center gap-1 rounded-full border border-border bg-card py-1 pl-2.5 pr-1 text-[11px] text-foreground/60"
+              >
+                <FileText className="h-3 w-3 shrink-0" />
+                <span className="truncate">{doc.name}</span>
+                {doc.documentId ? (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveSessionDoc(doc.documentId, doc.name)}
+                    aria-label={`Remove ${doc.name} from this chat`}
+                    title={`Remove ${doc.name} from this chat`}
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-foreground/40 transition-colors hover:bg-secondary hover:text-foreground"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                ) : null}
               </span>
-            </span>
+            ))}
           </div>
         )}
 

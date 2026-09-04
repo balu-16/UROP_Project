@@ -82,6 +82,8 @@ class EmbeddingService:
         return vector / norm if norm > 0 else vector
 
     async def embed_texts(self, texts: list[str]) -> np.ndarray:
+        if not texts:
+            return np.zeros((0, self.settings.embedding_dimension), dtype="float32")
         vectors: list[np.ndarray | None] = []
         missing: list[tuple[int, str, str]] = []
         for index, text in enumerate(texts):
@@ -111,6 +113,9 @@ class EmbeddingService:
                 arr = arr / norm if norm > 0 else arr
                 vectors[index] = arr
                 self.cache[key] = arr.tolist()
+            # Bound cache: drop oldest insertions past 20k entries.
+            while len(self.cache) > 20000:
+                self.cache.pop(next(iter(self.cache)))
         return np.vstack([vector for vector in vectors if vector is not None]).astype(
             "float32"
         )

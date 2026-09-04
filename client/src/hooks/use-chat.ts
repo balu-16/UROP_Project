@@ -28,6 +28,10 @@ export function useChat(
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  // History-load failures must not wipe the visible conversation. onError is
+  // kept in a ref so the loader effect doesn't re-run on callback identity.
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
   // High-frequency stream buffers. Tokens are accumulated in a ref and flushed
   // to React state once per animation frame, so a fast token burst causes one
@@ -87,7 +91,9 @@ export function useChat(
       if (!cancelled) setMessages(history);
     }
     loadHistory().catch(() => {
-      if (!cancelled) setMessages([]);
+      // Preserve whatever is on screen; surface the failure as a toast.
+      if (cancelled) return;
+      onErrorRef.current?.("Could not load chat history — showing cached messages.");
     });
     return () => {
       cancelled = true;
@@ -301,7 +307,12 @@ export function useChat(
 
     // Remove both the last assistant message and the user message that prompted
     // it, then resend — avoids duplicating the user message.
+    // Truncate server branch like editAndResend so stale pairs don't accumulate.
     const savedUserMessage = { ...lastUser };
+    const sessionId = lastUser.sessionId || activeSessionId;
+    if (sessionId && !lastUser.id.startsWith("user-")) {
+      truncateSession(sessionId, lastUser.id).catch(() => {});
+    }
     setMessages((prev) =>
       prev.filter((m) => m.id !== lastAssistant.id && m.id !== lastUser.id),
     );

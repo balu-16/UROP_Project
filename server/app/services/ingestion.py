@@ -43,6 +43,8 @@ class IngestionService:
         documents = []
         total_chunks = 0
         total_entities = 0
+        total_bytes = 0
+        total_cap = int(getattr(self.settings, "total_upload_max_mb", 100)) * 1024 * 1024
         # For PG inserts, collect supabase client if available
         supa = None
         use_pg = False
@@ -58,6 +60,12 @@ class IngestionService:
             text, metadata = await self.parser.parse_upload(
                 file, self.settings.upload_max_mb
             )
+            total_bytes += int(metadata.get("size_bytes", 0) or 0)
+            if total_bytes > total_cap:
+                raise ValueError(
+                    "Combined upload size exceeds the per-request limit "
+                    f"({self.settings.total_upload_max_mb}MB total)."
+                )
             if not text.strip():
                 logger.warning("Skipping empty/unparseable file: %s", getattr(file, "filename", "?"))
                 continue
@@ -158,19 +166,23 @@ class IngestionService:
                 except Exception as exc:
                     logger.warning("graph add_chunk failed: %s", exc)
 
-            # Legacy indexed_documents for existing metrics
+            # Legacy indexed_documents for existing metrics.
+            # Chunk ULIDs live inside metadata JSON (indexed_documents has no
+            # top-level chunk_ids column in migration 001) so un-upload can
+            # clean vectors/graph even for legacy/memory rows without a PG link.
+            meta_out = {**metadata, "chunk_ids": [c["chunk_id"] for c in chunks]}
             record = {
                 "_id": document_id_ulid,
                 "user_id": user_id,
                 "session_id": session_id,
                 "filename": metadata["source"],
-                "metadata": metadata,
+                "metadata": meta_out,
                 "chunk_count": len(chunks),
                 "created_at": utc_now(),
             }
-            # Store PG trace inside metadata if needed (indexed_documents schema has no pg_document_id column)
+            # Store PG trace inside metadata (indexed_documents schema has no pg_document_id column)
             if pg_doc_uuid:
-                record["metadata"] = {**metadata, "pg_document_id": pg_doc_uuid}
+                record["metadata"] = {**meta_out, "pg_document_id": pg_doc_uuid}
             await self.db.collection("indexed_documents").insert_one(record)
             documents.append(record)
             total_chunks += len(chunks)
@@ -196,4 +208,203 @@ class IngestionService:
             "entity_count": total_entities,
             "vector_index_size": self.vector_store.size(),
             "graph": gstats,
+        }
+
+    async def delete_document(self, user_id: str, session_id: str, document_ulid: str) -> dict | None:
+        """Delete an uploaded document and all its artifacts (un-upload).
+
+        Removes, in order: Chroma vectors (by chunk ULIDs) → PG documents row
+        (SQL cascades chunks + chunk_entities) → explicit chunk/chunk_entities
+        cleanup (memory DB has no cascades; no-op on PG) → orphan-entity prune
+        (shared entities survive) → indexed_documents row.
+
+        Returns a deletion report, or None when the document doesn't belong to
+        this user/chat (callers map that to 404; repeats are therefore
+        idempotent). Steps are best-effort and individually logged: a partial
+        failure still removes the indexed row so retries return not-found
+        instead of looping on the same artifact.
+        """
+        record = await self.db.collection("indexed_documents").find_one(
+            {"_id": document_ulid, "user_id": user_id, "session_id": session_id}
+        )
+        if not record:
+            return None
+        metadata = record.get("metadata") or {}
+        pg_doc_id = metadata.get("pg_document_id")
+        deleted = {
+            "vectors": 0,
+            "chunks": 0,
+            "documents": 0,
+            "entities_pruned": 0,
+            "relationships_removed": 0,
+            "indexed_documents": 0,
+        }
+
+        # 1. Resolve PG chunk rows first (yields Chroma ULIDs + entity links).
+        # Legacy/memory rows have no PG link: fall back to stored chunk_ids,
+        # then to a session-scoped Chroma listing by document_id.
+        pg_chunks: list[dict] = []
+        if pg_doc_id:
+            try:
+                pg_chunks = await self.db.collection("chunks").find(
+                    {"document_id": pg_doc_id}
+                ).to_list(100000)
+            except Exception as exc:
+                logger.warning("delete: chunks lookup failed for %s: %s", document_ulid, exc)
+        chunk_ulids = [r.get("chunk_id") for r in pg_chunks if r.get("chunk_id")]
+        chunk_uuids = [r.get("id") for r in pg_chunks if r.get("id")]
+        if not chunk_ulids:
+            # Chunk ULIDs are stored in metadata JSON (see index_uploads);
+            # also accept a legacy top-level key for old memory rows.
+            stored = record.get("chunk_ids") or (metadata.get("chunk_ids") or [])
+            chunk_ulids = [c for c in stored if c]
+        if not chunk_ulids:
+            # Last resort for old legacy rows: list Chroma points for this doc.
+            try:
+                vs = self.vector_store
+                coll = getattr(vs, "collection", None)
+                if coll is not None:
+                    where = {
+                        "$and": [
+                            {"document_id": document_ulid},
+                            {"session_id": session_id},
+                            {"user_id": user_id},
+                        ]
+                    }
+                    res = coll.get(where=where, limit=100000)
+                    ids = (res.get("ids", []) if res else []) or []
+                    chunk_ulids = list(ids)
+            except Exception as exc:
+                logger.warning("delete: chroma listing failed for %s: %s", document_ulid, exc)
+        entity_ids: set[str] = set()
+        if chunk_uuids:
+            try:
+                links = await self.db.collection("chunk_entities").find(
+                    {"chunk_id": {"$in": chunk_uuids}}
+                ).to_list(100000)
+                entity_ids = {l.get("entity_id") for l in links if l.get("entity_id")}
+            except Exception as exc:
+                logger.warning("delete: entity-link lookup failed for %s: %s", document_ulid, exc)
+
+        # 2. Chroma vectors by ULID (best-effort; the index rebuilds from PG).
+        if chunk_ulids:
+            try:
+                self.vector_store.delete(chunk_ids=chunk_ulids)
+                deleted["vectors"] = len(chunk_ulids)
+            except Exception as exc:
+                logger.warning("delete: vector removal failed for %s: %s", document_ulid, exc)
+
+        # 3. PG documents row (SQL cascades chunks + chunk_entities).
+        if pg_doc_id:
+            try:
+                res = await self.db.collection("documents").delete_many(
+                    {"id": pg_doc_id, "user_id": user_id}
+                )
+                deleted["documents"] = res.deleted_count
+            except Exception as exc:
+                logger.warning("delete: documents row removal failed for %s: %s", document_ulid, exc)
+            # Explicit cleanup for backends without cascades (memory DB).
+            # No-ops on PG where the cascade already removed these rows.
+            try:
+                cres = await self.db.collection("chunks").delete_many({"document_id": pg_doc_id})
+                deleted["chunks"] = cres.deleted_count
+            except Exception as exc:
+                logger.warning("delete: chunks cleanup failed for %s: %s", document_ulid, exc)
+            if chunk_uuids:
+                try:
+                    await self.db.collection("chunk_entities").delete_many(
+                        {"chunk_id": {"$in": chunk_uuids}}
+                    )
+                except Exception as exc:
+                    logger.warning("delete: chunk_entities cleanup failed for %s: %s", document_ulid, exc)
+
+        # 4. Prune entities orphaned by this delete. Shared entities (still
+        # referenced by another document's chunks or any relationship reaching
+        # a live entity) survive. Two-phase closure: an entity is prunable
+        # when it has no chunk references left AND every incident edge touches
+        # only chunkless entities (otherwise the edge is shared knowledge and
+        # both it and the entity stay). Relationships have no document link,
+        # so edges between two pruned entities are removed with them; every
+        # other edge is kept. Errs toward keeping.
+        async def _has_chunk_refs(eid: str) -> bool:
+            try:
+                return bool(await self.db.collection("chunk_entities").find_one({"entity_id": eid}))
+            except Exception as exc:
+                logger.warning("delete: chunk-ref check failed for %s: %s", eid, exc)
+                return True  # fail closed: keep the entity
+
+        async def _incident_edges(eid: str) -> list[dict]:
+            rows: list[dict] = []
+            for key in ("source_entity_id", "target_entity_id"):
+                try:
+                    rows.extend(
+                        await self.db.collection("relationships").find({key: eid}).to_list(10000)
+                    )
+                except Exception as exc:
+                    logger.warning("delete: edge lookup failed for %s: %s", eid, exc)
+            return rows
+
+        chunkless = {eid for eid in entity_ids if not await _has_chunk_refs(eid)}
+        prune_set: set[str] = set()
+        for eid in sorted(chunkless):
+            try:
+                shared = False
+                for row in await _incident_edges(eid):
+                    other = row.get("target_entity_id" if row.get("source_entity_id") == eid else "source_entity_id")
+                    if not other:
+                        continue
+                    if other not in chunkless and await _has_chunk_refs(other):
+                        shared = True  # edge reaches live, chunk-backed knowledge
+                        break
+                    if other not in entity_ids:
+                        # Edge reaches an entity outside this delete entirely:
+                        # shared knowledge — keep both the edge and eid.
+                        shared = True
+                        break
+                if not shared:
+                    prune_set.add(eid)
+            except Exception as exc:
+                logger.warning("delete: prune evaluation failed for %s: %s", eid, exc)
+        for eid in sorted(prune_set):
+            try:
+                # Remove every incident edge (PG cascades these automatically on
+                # entity delete; explicit here for backends without cascades —
+                # by construction no kept entity depends on them, see above).
+                for key in ("source_entity_id", "target_entity_id"):
+                    try:
+                        rres = await self.db.collection("relationships").delete_many({key: eid})
+                        deleted["relationships_removed"] += rres.deleted_count
+                    except Exception as exc:
+                        logger.warning("delete: relationship cleanup failed for %s: %s", eid, exc)
+                eres = await self.db.collection("entities").delete_many({"id": eid})
+                deleted["entities_pruned"] += eres.deleted_count
+            except Exception as exc:
+                logger.warning("delete: entity prune failed for %s: %s", eid, exc)
+
+        # 4b. In-memory graph structures (memory DB stores edges only in dicts,
+        # never in chunk_entities/relationships collections).
+        if chunk_ulids:
+            try:
+                remover = getattr(self.graph_store, "remove_chunks", None)
+                if callable(remover):
+                    stats = remover(chunk_ulids)
+                    if isinstance(stats, dict):
+                        deleted["entities_pruned"] += int(stats.get("entities", 0) or 0)
+                        deleted["relationships_removed"] += int(stats.get("edges", 0) or 0)
+            except Exception as exc:
+                logger.warning("delete: memory graph prune failed for %s: %s", document_ulid, exc)
+
+        # 5. Indexed row last: afterwards repeats cleanly return not-found.
+        try:
+            ires = await self.db.collection("indexed_documents").delete_many(
+                {"_id": document_ulid, "user_id": user_id, "session_id": session_id}
+            )
+            deleted["indexed_documents"] = ires.deleted_count
+        except Exception as exc:
+            logger.warning("delete: indexed row removal failed for %s: %s", document_ulid, exc)
+
+        return {
+            "document_id": document_ulid,
+            "filename": record.get("filename"),
+            **deleted,
         }

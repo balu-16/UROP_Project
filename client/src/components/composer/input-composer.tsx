@@ -19,6 +19,8 @@ export interface PendingAttachment {
   id: string;
   name: string;
   status: PendingStatus;
+  /** Backend document _id once indexed (enables un-upload via DELETE). */
+  documentId?: string;
 }
 
 interface InputComposerProps {
@@ -134,7 +136,11 @@ export function InputComposer({
               key={p.id}
               name={p.name}
               status={p.status}
-              onRemove={onRemovePending ? () => onRemovePending(p.id) : undefined}
+              onRemove={
+                onRemovePending && p.status !== "deleting"
+                  ? () => onRemovePending(p.id)
+                  : undefined
+              }
             />
           ))}
         </div>

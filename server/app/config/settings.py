@@ -10,8 +10,12 @@ class Settings(BaseSettings):
     # ── App ──
     app_name: str = "RAGnostic"
     environment: str = "local"
+    # Deprecated: routers declare both bare + /api-prefixed paths explicitly
+    # in main.py; api_prefix is kept only so old .env files still parse.
     api_prefix: str = "/api"
     port: int = 8000
+    # Deprecated: CORS is driven by cors_origins (cors_origin_list);
+    # frontend_origin is kept only so old .env files still parse.
     frontend_origin: str = "http://localhost:3000"
     cors_origins: str = "http://localhost:3000"
 
@@ -40,7 +44,7 @@ class Settings(BaseSettings):
 
     # ── Auth (JWT custom HS256) ──
     jwt_secret: str = ""
-    jwt_algorithm: str = "HS256"
+    jwt_algorithm: str = Field(default="HS256", pattern="^HS256$")
     access_token_minutes: int = 30
     refresh_token_days: int = 14
     cookie_secure: bool = False
@@ -85,10 +89,28 @@ class Settings(BaseSettings):
     max_hops: int = 2
     max_graph_nodes: int = 40
 
+    # ── Hybrid retrieval (vector + keyword RRF) ──
+    vector_top_k: int = 50
+    keyword_top_k: int = 50
+    rrf_k: int = 60
+
+    # ── Cross-encoder reranking (runs AFTER 0/1/2-hop, never before) ──
+    # NOTE: rerank_top_k=5 < top_k=6 by design — the final context is capped
+    # to the top-5 reranked chunks even though 6 seeds start expansion.
+    reranker_enabled: bool = True
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    rerank_candidate_cap: int = 100
+    rerank_top_k: int = 5
+
     # ── Storage / Ops ──
     storage_dir: Path = Path("storage")
     upload_max_mb: int = 25
+    total_upload_max_mb: int = 100
+    greeting_confidence_threshold: float = 0.45
     rate_limit_per_minute: int = 90
+    rate_limit_auth_per_minute: int = 10
+    rate_limit_chat_per_minute: int = 30
+    rate_limit_ingest_per_minute: int = 12
     debug_retrieval: bool = False
 
     model_config = SettingsConfigDict(

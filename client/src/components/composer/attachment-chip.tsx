@@ -29,7 +29,7 @@ const KIND_STYLES: Record<AttachmentKind, { icon: typeof FileText; className: st
   text: { icon: FileType, className: "text-foreground/50" },
 };
 
-export type PendingStatus = "indexing" | "ready" | "error";
+export type PendingStatus = "indexing" | "ready" | "error" | "deleting";
 
 interface AttachmentChipProps {
   name: string;
@@ -60,7 +60,7 @@ export function AttachmentChip({ name, kind, status, onRemove, className }: Atta
         <span className="block truncate text-[13px] font-medium text-foreground">{name}</span>
         <span className="flex items-center gap-1 text-[11px] text-foreground/45">
           {kindLabel(resolved)}
-          {status === "indexing" && (
+          {(status === "indexing" || status === "deleting") && (
             <Loader2 className="h-3 w-3 animate-spin text-foreground/40" />
           )}
           {status === "ready" && <Check className="h-3 w-3 text-emerald-500" />}

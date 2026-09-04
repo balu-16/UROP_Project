@@ -13,6 +13,8 @@ from app.evaluation import RewardEvaluator
 from app.graph_store.pg_store import PGGraphStore
 from app.retrieval.adaptive import AdaptiveRetrievalService
 from app.retrieval.confidence import RetrievalConfidenceEvaluator
+from app.retrieval.keyword import PostgresKeywordRetriever, extract_supa_client, supa_rpc_caller
+from app.retrieval.reranking import NullReranker, build_reranker
 from app.retrieval.policy import ThresholdRetrievalPolicy
 from app.services.chat import ChatService
 from app.services.context import ContextBuilder
@@ -96,8 +98,23 @@ async def lifespan(app: FastAPI):
     confidence = RetrievalConfidenceEvaluator()
     policy = ThresholdRetrievalPolicy(settings)
     context_builder = ContextBuilder(settings)
+    # Lexical branch of hybrid retrieval. Degrades to vector-only when no PG
+    # client exists (memory-DB tests, offline mode) — never crashes boot.
+    _supa_client = extract_supa_client(db)
+    keyword_retriever = PostgresKeywordRetriever(
+        settings, supa_rpc_caller(_supa_client) if _supa_client is not None else None
+    )
+    # Cross-encoder reranker (post-hop). build_reranker never raises: worst
+    # case is NullReranker, so strict boot is unaffected by model availability.
+    try:
+        reranker = build_reranker(settings)
+    except Exception as exc:
+        logger.warning("reranker wiring failed (%s) — continuing without reranking", exc)
+        reranker = NullReranker("wiring_failed")
     adaptive_retrieval = AdaptiveRetrievalService(
-        settings, embeddings, vector_store, graph_store, confidence, policy, context_builder
+        settings, embeddings, vector_store, graph_store, confidence, policy, context_builder,
+        keyword_retriever=keyword_retriever,
+        reranker=reranker,
     )
     reward_evaluator = RewardEvaluator(embeddings)
     llm = LLMClient(settings)
@@ -139,9 +156,53 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
     logger.info("RAGnostic backend started (PG+Chroma, threshold=%s/%s, max_hops=%s)", settings.high_threshold, settings.low_threshold, settings.max_hops)
+
+    # Periodic purge of expired chat sessions (memory + PG). Runs daily;
+    # cancelled on shutdown.
+    import asyncio as _asyncio
+
+    _stop_cleanup = _asyncio.Event()
+
+    async def _cleanup_loop() -> None:
+        try:
+            while not _stop_cleanup.is_set():
+                try:
+                    await _asyncio.wait_for(_stop_cleanup.wait(), timeout=24 * 3600)
+                except _asyncio.TimeoutError:
+                    pass
+                if _stop_cleanup.is_set():
+                    break
+                try:
+                    removed = await session_service.cleanup_expired()
+                    if removed:
+                        logger.info("Cleaned up %d expired chat sessions", removed)
+                except Exception:
+                    logger.exception("Periodic chat-session cleanup failed")
+        except _asyncio.CancelledError:
+            pass
+
+    _cleanup_task = _asyncio.create_task(_cleanup_loop())
+    # Keep a handle so shutdown can cancel it deterministically.
+    chat_service = app.state.chat_service
     try:
         yield
     finally:
+        _stop_cleanup.set()
+        _cleanup_task.cancel()
+        try:
+            await _cleanup_task
+        except Exception:
+            pass
+        # Drain pending background inserts (retrieval/reward logs) before
+        # closing the DB so buffered writes are not lost on shutdown.
+        try:
+            pending = list(getattr(chat_service, "_background_tasks", set()))
+            if pending:
+                await _asyncio.wait_for(
+                    _asyncio.gather(*pending, return_exceptions=True), timeout=10.0
+                )
+        except Exception:
+            logger.exception("Error draining background tasks")
         try:
             await llm.close()
         except Exception:
@@ -185,7 +246,9 @@ def create_app() -> FastAPI:
             self.paths = paths
 
         async def __call__(self, scope, receive, send):
-            if scope["type"] == "http" and scope["path"] in self.paths:
+            _p = scope.get("path") or "/"
+            _norm = _p[:-1] if len(_p) > 1 and _p.endswith("/") else _p
+            if scope["type"] == "http" and _norm in {p if len(p) == 1 or not p.endswith("/") else p[:-1] for p in self.paths}:
                 scope["headers"] = [
                     (key, b"identity" if key == b"accept-encoding" else value)
                     for key, value in scope["headers"]
@@ -204,7 +267,19 @@ def create_app() -> FastAPI:
         allow_headers=["Content-Type", "Authorization"],
         max_age=600,
     )
-    limiter = InMemoryRateLimiter(settings.rate_limit_per_minute)
+    limiter = InMemoryRateLimiter(
+        settings.rate_limit_per_minute,
+        per_route_limits={
+            "/auth": settings.rate_limit_auth_per_minute,
+            "/api/auth": settings.rate_limit_auth_per_minute,
+            "/chat": settings.rate_limit_chat_per_minute,
+            "/api/chat": settings.rate_limit_chat_per_minute,
+            "/index-documents": settings.rate_limit_ingest_per_minute,
+            "/api/index-documents": settings.rate_limit_ingest_per_minute,
+            "/ingestion": settings.rate_limit_ingest_per_minute,
+            "/api/ingestion": settings.rate_limit_ingest_per_minute,
+        },
+    )
     app.add_middleware(
         RateLimitMiddleware, limiter=limiter, exempt_paths={"/health", "/app-config", "/api/health", "/api/app-config"}
     )

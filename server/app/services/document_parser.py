@@ -10,9 +10,17 @@ class DocumentParser:
         filename = file.filename or "document.txt"
         suffix = Path(filename).suffix.lower()
         if suffix not in self.supported_extensions:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported file type: {suffix}")
-        data = await file.read()
-        if len(data) > max_mb * 1024 * 1024:
+            raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=f"Unsupported file type: {suffix}")
+        # Pre-check declared size when available so oversized uploads fail
+        # before buffering the whole body into RAM.
+        declared = getattr(file, "size", None)
+        if isinstance(declared, int) and declared > max_mb * 1024 * 1024:
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File is too large")
+        limit = max_mb * 1024 * 1024
+        # Stream with a hard cap: read limit+1 bytes so a hostile body that
+        # lies about Content-Length still trips 413 without OOM.
+        data = await file.read(limit + 1)
+        if len(data) > limit:
             raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File is too large")
         if suffix == ".pdf":
             text = self._parse_pdf(data)

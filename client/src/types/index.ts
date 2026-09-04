@@ -1,8 +1,12 @@
 export interface RetrievalInfo {
   depth: number; // 0,1,2
   confidence: number;
-  strategy: string; // ZERO_HOP / ONE_HOP / TWO_HOP
+  strategy: string; // ZERO_HOP / ONE_HOP / TWO_HOP (never repurposed)
   initial_confidence?: number;
+  retrieval_mode?: string; // "hybrid" when RRF fusion ran
+  candidate_count?: number; // pre-rerank final set size
+  reranked_count?: number; // chunks sent to context after rerank
+  reranker_model?: string | null;
 }
 
 export interface Attachment {

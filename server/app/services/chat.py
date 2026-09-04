@@ -33,6 +33,28 @@ DEPTH_TO_ARM = {
     2: "graph_rag_2hop",
 }
 
+_GREETING_RE = re.compile(r"^(hi|hello|hey|hola|namaste|good\s+(morning|afternoon|evening)|yo)(\b|!|\.|,)", re.I)
+_GREETING_EXACT = {"hello man", "hey man", "hi man", "hello", "hi", "hey", "hello there", "hey there"}
+GREETING_TEXT = (
+    "## Hello! 👋\n\n"
+    "I'm **RAGnostic** — your adaptive RAG assistant. I can answer from your uploaded documents with citations, "
+    "or just chat.\n\n"
+    "Try asking something like:\n"
+    "- *Summarize my documents*\n"
+    "- *What are the key findings?*\n"
+    "- Or upload a PDF/TXT/MD and ask about it."
+)
+GREETING_FOLLOWUPS = ["Summarize my documents", "How does adaptive retrieval work?", "What can you do?"]
+
+
+def _is_greeting(message: str) -> bool:
+    clean = message.strip().lower().split("?")[0].split("!")[0].strip()
+    return bool(_GREETING_RE.match(clean)) or clean in _GREETING_EXACT
+
+
+def _is_short_message(message: str, max_words: int = 4) -> bool:
+    return len(message.strip().split()) <= max_words
+
 
 class ChatService:
     def __init__(
@@ -113,30 +135,21 @@ class ChatService:
             "content": message,
             "created_at": utc_now(),
         }
-        # Early greeting fast-path — before retrieval/LLM, so Hello always works instantly
-        _greeting_re = re.compile(r"^(hi|hello|hey|hola|namaste|good\s+(morning|afternoon|evening)|yo)(\b|!|\.|,)", re.I)
-        _clean = message.strip().lower().split("?")[0].split("!")[0].strip()
-        is_early_greeting = bool(_greeting_re.match(_clean)) or _clean in {"hello man", "hey man", "hi man", "hello", "hi", "hey", "hello there", "hey there"}
-        if is_early_greeting and len(message.strip().split()) <= 4:
+        # Early greeting fast-path — before retrieval/LLM, so Hello always works instantly.
+        # Strategy stays ZERO_HOP (strategy enum untouched); diagnostics mirror retrieval.
+        if _is_greeting(message) and _is_short_message(message):
             # For pure greetings, skip retrieval entirely
             await self.db.collection("messages").insert_one(user_message)
-            greeting_text = (
-                "## Hello! 👋\n\n"
-                "I'm **RAGnostic** — your adaptive RAG assistant. I can answer from your uploaded documents with citations, "
-                "or just chat.\n\n"
-                "Try asking something like:\n"
-                "- *Summarize my documents*\n"
-                "- *What are the key findings?*\n"
-                "- Or upload a PDF/TXT/MD and ask about it."
-            )
+            greeting_text = GREETING_TEXT
             yield sse_event("stage", {"stage": "thinking"})
-            yield sse_event("metadata", {"session_id": chat_session["_id"], "sources": [], "retrieval": {"depth": 0, "confidence": 1.0, "strategy": "GREETING"}})
+            yield sse_event("metadata", {"session_id": chat_session["_id"], "sources": [], "retrieval": {"depth": 0, "confidence": 1.0, "strategy": "ZERO_HOP"}})
             yield sse_event("stage", {"stage": "writing"})
             for tok in greeting_text.split(" "):
                 if await request.is_disconnected():
                     break
                 yield sse_event("token", {"delta": tok + " "})
                 await asyncio.sleep(0.008)
+            greeting_retrieval = {"depth": 0, "confidence": 1.0, "strategy": "ZERO_HOP"}
             greeting_msg = {
                 "_id": new_id("msg"),
                 "user_id": user["_id"],
@@ -148,14 +161,19 @@ class ChatService:
                 "reward": 0.5,
                 "latency_ms": int((time.perf_counter() - start) * 1000),
                 "reasoning_metadata": {},
-                "retrieval_diagnostics": {},
-                "retrieval_log_id": new_id("ret"),
+                "retrieval_diagnostics": {"depth": 0, "confidence": 1.0, "strategy": "ZERO_HOP"},
+                "retrieval": greeting_retrieval,
+                "retrieval_log_id": None,
                 "created_at": utc_now(),
             }
             await self.db.collection("messages").insert_one(greeting_msg)
+            try:
+                self.metrics.record_chat("standard_rag", (time.perf_counter() - start) * 1000, 0.5)
+            except Exception:
+                pass
             await self.sessions.touch(chat_session["_id"])
             yield sse_event("done", {"message_id": greeting_msg["_id"], "session_id": chat_session["_id"]})
-            yield sse_event("followups", {"questions": ["Summarize my documents", "How does adaptive retrieval work?", "What can you do?"]})
+            yield sse_event("followups", {"questions": GREETING_FOLLOWUPS})
             return
 
         yield sse_event("stage", {"stage": "retrieving"})
@@ -188,9 +206,10 @@ class ChatService:
         context_text = adaptive_payload["context"]
         chunks = adaptive_payload["chunks"]
 
-        # Prepare client sources (truncate for SSE)
+        # Prepare client sources (truncate for SSE). Raw reranker logits are
+        # sort-only server-side signals — never ship scores to the client.
         client_sources = []
-        for s in chunks:
+        for rank, s in enumerate(chunks, start=1):
             text = s.get("text", "")
             client_sources.append(
                 {
@@ -199,7 +218,7 @@ class ChatService:
                     "text": text[:600],
                     "truncated": len(text) > 600,
                     "metadata": s.get("metadata", {}),
-                    "score": s.get("score", 0),
+                    "rank": rank,
                     "entity_ids": s.get("entity_ids", []),
                 }
             )
@@ -212,6 +231,10 @@ class ChatService:
                 "confidence": confidence,
                 "strategy": strategy,
                 "initial_confidence": retrieval_meta.get("initial_confidence", confidence),
+                "retrieval_mode": retrieval_meta.get("retrieval_mode", "hybrid"),
+                "candidate_count": retrieval_meta.get("candidate_count", 0),
+                "reranked_count": retrieval_meta.get("reranked_count", 0),
+                "reranker_model": retrieval_meta.get("reranker_model"),
             },
         }
         # Keep legacy fields for frontend compatibility
@@ -242,25 +265,15 @@ class ChatService:
         yield sse_event("metadata", metadata)
         yield sse_event("stage", {"stage": "thinking"})
 
-        # Fast-path for simple greetings / no-document Hello — avoid LLM roundtrip
-        _greeting_re = re.compile(r"^(hi|hello|hey|hola|namaste|good\s+(morning|afternoon|evening)|yo)(\b|!|\.|,)", re.I)
-        _clean = message.strip().lower().split("?")[0].split("!")[0].strip()
-        is_greeting = bool(_greeting_re.match(_clean)) or _clean in {"hello man", "hey man", "hi man", "hello", "hi", "hey"}
-        if is_greeting and confidence < 0.45:
-            greeting_text = (
-                "## Hello! 👋\n\n"
-                "I'm **RAGnostic** — your adaptive RAG assistant. I can answer from your uploaded documents with citations, "
-                "or just chat.\n\n"
-                "Try asking something like:\n"
-                "- *Summarize my documents*\n"
-                "- *What are the key findings?*\n"
-                "- Or upload a PDF/TXT/MD and ask about it."
-            )
+        # Fast-path for simple greetings / no-document Hello — avoid LLM roundtrip.
+        # Threshold lives in Settings so it can be tuned without code changes.
+        if _is_greeting(message) and confidence < self.retrieval.settings.greeting_confidence_threshold:
+            greeting_text = GREETING_TEXT
             yield sse_event("stage", {"stage": "writing"})
             for tok in greeting_text.split(" "):
                 yield sse_event("token", {"delta": tok + " "})
                 await asyncio.sleep(0.008)
-            # Persist as assistant message
+            # Persist as assistant message (keep retrieval so reload badge matches live)
             latency_ms = (time.perf_counter() - start) * 1000
             greeting_msg = {
                 "_id": new_id("msg"),
@@ -274,10 +287,15 @@ class ChatService:
                 "latency_ms": int(latency_ms),
                 "reasoning_metadata": {},
                 "retrieval_diagnostics": adaptive_payload.get("diagnostics", {}),
+                "retrieval": retrieval_meta,
                 "retrieval_log_id": retrieval_log_id,
                 "created_at": utc_now(),
             }
             await self.db.collection("messages").insert_one(greeting_msg)
+            try:
+                self.metrics.record_chat(selected_arm, latency_ms, 0.5)
+            except Exception:
+                pass
             await self.sessions.touch(chat_session["_id"])
             yield sse_event("done", {"message_id": greeting_msg["_id"], "session_id": chat_session["_id"]})
             yield sse_event("followups", {"questions": ["Summarize my documents", "How does adaptive retrieval work?", "What can you do?"]})
@@ -340,9 +358,15 @@ class ChatService:
             return
 
         latency_ms = (time.perf_counter() - start) * 1000
-        reward = await self.reward_evaluator.evaluate(
-            message, answer, chunks, latency_ms, usage
-        )
+        try:
+            reward = await self.reward_evaluator.evaluate(
+                message, answer, chunks, latency_ms, usage
+            )
+            if not isinstance(reward, dict):
+                reward = {"reward": 0.0}
+        except Exception:
+            logger.exception("Reward evaluation failed — persisting partial answer")
+            reward = {"reward": 0.0, "truncated": True}
 
         assistant_message = {
             "_id": new_id("msg"),
@@ -356,6 +380,7 @@ class ChatService:
             "latency_ms": int(latency_ms),
             "reasoning_metadata": {"reasoning_details": reasoning_details},
             "retrieval_diagnostics": adaptive_payload.get("diagnostics", {}),
+            "retrieval": retrieval_meta,
             "retrieval_log_id": retrieval_log_id,
             "created_at": utc_now(),
         }
@@ -377,7 +402,10 @@ class ChatService:
         }
         self._spawn(self._safe_insert("reward_logs", reward_log))
         await self.sessions.touch(chat_session["_id"])
-        self.metrics.record_chat(selected_arm, latency_ms, reward["reward"])
+        try:
+            self.metrics.record_chat(selected_arm, latency_ms, reward.get("reward", 0.0))
+        except Exception:
+            pass
         yield sse_event("reward", reward)
         done_payload = {
             "message_id": assistant_message["_id"],
@@ -419,8 +447,10 @@ class ChatService:
             logger.exception("Background insert into %s failed", collection)
 
     def _source_payload(self, chunks: list[dict]) -> list[dict]:
+        # Persisted sources mirror the SSE shape: rank order + text, no raw
+        # logits. Diagnostics/keys stay server-side in retrieval_logs.
         payload = []
-        for chunk in chunks:
+        for rank, chunk in enumerate(chunks, start=1):
             text = chunk.get("text", "")
             payload.append(
                 {
@@ -428,7 +458,7 @@ class ChatService:
                     "document_id": chunk.get("document_id"),
                     "text": text[:600],
                     "truncated": len(text) > 600,
-                    "score": chunk.get("score", 0),
+                    "rank": rank,
                     "metadata": chunk.get("metadata", {}),
                     "entity_ids": chunk.get("entity_ids", []),
                 }

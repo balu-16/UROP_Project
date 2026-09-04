@@ -36,13 +36,14 @@ async def _truncate_impl(session_id: str, payload: TruncateRequest, user: dict, 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     message = await db.collection("messages").find_one(
-        {"_id": payload.message_id, "session_id": session_id}
+        {"_id": payload.message_id, "session_id": session_id, "user_id": user["_id"]}
     )
     if not message:
         raise HTTPException(status_code=404, detail="Message not found")
     result = await db.collection("messages").delete_many(
         {
             "session_id": session_id,
+            "user_id": user["_id"],
             "created_at": {"$gte": message["created_at"]},
         }
     )

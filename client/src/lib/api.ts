@@ -155,6 +155,21 @@ export async function createSession(title?: string) {
 }
 
 function toMessage(raw: Record<string, any>): Message {
+  const diag = (raw.retrieval_diagnostics as Record<string, any>) || {};
+  const fallbackRetrieval =
+    typeof diag.depth === "number"
+      ? {
+          depth: diag.depth,
+          confidence: diag.confidence ?? 0,
+          strategy: diag.strategy || "",
+          retrieval_mode: (diag as Record<string, any>).retrieval_mode ?? "hybrid",
+          candidate_count:
+            (diag as Record<string, any>).candidate_count ??
+            (diag as Record<string, any>).rerank_candidate_count,
+          reranked_count: (diag as Record<string, any>).reranked_count,
+          reranker_model: (diag as Record<string, any>).reranker_model ?? null,
+        }
+      : undefined;
   return {
     id: raw._id,
     role: raw.role,
@@ -167,6 +182,14 @@ function toMessage(raw: Record<string, any>): Message {
     latencyMs: raw.latency_ms,
     reasoningMetadata: raw.reasoning_metadata || {},
     retrievalDiagnostics: raw.retrieval_diagnostics || {},
+    // New rows persist full `retrieval`; legacy rows fall back to diagnostics.
+    retrieval: raw.retrieval || fallbackRetrieval,
+    // Follow-ups/stage are live-SSE-only today (never persisted server-side);
+    // pass through when present so a future persisted shape just works.
+    ...(Array.isArray(raw.follow_ups) || Array.isArray(raw.followups)
+      ? { followUps: raw.follow_ups ?? raw.followups }
+      : {}),
+    ...(typeof raw.stage === "string" ? { stage: raw.stage } : {}),
   };
 }
 
@@ -208,7 +231,7 @@ export async function truncateSession(sessionId: string, messageId: string) {
 export async function uploadFiles(
   files: File[],
   sessionId: string | null,
-): Promise<{ indexed: number; chunk_count: number; documents?: unknown[] }> {
+): Promise<{ indexed: number; chunk_count: number; documents?: UploadedDocument[] }> {
   const formData = new FormData();
   for (const file of files) formData.append("files", file);
   // Documents belong to exactly one chat: the backend requires session_id
@@ -220,10 +243,45 @@ export async function uploadFiles(
   });
   const data = await parseJson<{
     chunk_count: number;
-    documents?: unknown[];
+    documents?: UploadedDocument[];
   }>(response);
   // Backend returns {chunk_count, ...}; keep legacy {indexed} for callers
   return { indexed: data.chunk_count, chunk_count: data.chunk_count, documents: data.documents };
+}
+
+export interface UploadedDocument {
+  _id: string;
+  filename?: string;
+  metadata?: { source?: string };
+  chunk_count?: number;
+}
+
+export interface SessionDocument {
+  _id: string;
+  filename?: string;
+  chunk_count?: number;
+  created_at?: string;
+}
+
+/** Session-scoped document list (server truth; localStorage stays as cache). */
+export async function listDocuments(sessionId: string): Promise<SessionDocument[]> {
+  const response = await authFetch(
+    `/documents?session_id=${encodeURIComponent(sessionId)}`,
+  );
+  const data = await parseJson<{ documents?: SessionDocument[] }>(response);
+  return Array.isArray(data.documents) ? data.documents : [];
+}
+
+/** Un-upload: delete a document and all its chunks/vectors/graph links. */
+export async function deleteDocument(
+  documentId: string,
+  sessionId: string,
+): Promise<{ ok: boolean; deleted?: Record<string, unknown> }> {
+  const response = await authFetch(
+    `/documents/${encodeURIComponent(documentId)}?session_id=${encodeURIComponent(sessionId)}`,
+    { method: "DELETE" },
+  );
+  return parseJson<{ ok: boolean; deleted?: Record<string, unknown> }>(response);
 }
 
 export async function streamChat(

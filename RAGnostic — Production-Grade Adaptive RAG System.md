@@ -151,7 +151,7 @@ No prompt building inside DB/vector layers.
 
 ## 13. Reranker & Bandit
 
-**No reranker V1 (§20):** interface `Reranker { rerank }` pass-through. **No bandit V1 (§21):** interface `RetrievalPolicy` with `ThresholdRetrievalPolicy` now, `BanditRetrievalPolicy` future without rewriting pipeline.
+**Reranker (implemented post-V1, see thinking.md + plan.md):** interface `Reranker { rerank }` with `CrossEncoderReranker (ms-marco-MiniLM-L-6-v2, raw logits, sort-only)` + `NullReranker` passthrough (disabled / `DISABLE_LOCAL_MODELS` / load failure). Runs AFTER 0/1/2-hop, never before; `RERANK_TOP_K=5 < TOP_K=6` by design; `Null` path preserves RRF order verbatim. **No bandit V1 (§21):** interface `RetrievalPolicy` with `ThresholdRetrievalPolicy` now, `BanditRetrievalPolicy` future without rewriting pipeline.
 
 ---
 
@@ -185,6 +185,8 @@ POST /api/chat  (alias: POST /chat for compat)
 POST /api/ingestion  (aliases: /index-documents, /api/index-documents)
 multipart files (max 20, 25MB each, .pdf/.txt/.md/.markdown/.pptx)
 → {documents[], chunk_count, entity_count, vector_index_size, graph{nodes,edges}}
+GET /documents?session_id=… (alias: /api/documents) → {documents: [{_id, filename, chunk_count}]}
+DELETE /documents/{id}?session_id=… (alias: /api/documents/{id}) → {ok, deleted}
 ```
 
 **Health:**
@@ -363,4 +365,4 @@ npm run dev
 
 **Known limits:** Hash embeddings when `DISABLE_LOCAL_MODELS=true` give lower scores (~0.28) so 0-hop rarely triggers in tests; real model restores thresholds. PG graph is simple `mentioned_with`; richer relations are V2.
 
-**Next step (reranker):** Implement `app/reranking/cross_encoder.py` behind `Reranker` interface, insert between `AdaptiveRetrievalService.retrieve()` and `ContextBuilder.build()` without changing other modules.
+**Reranker status (done, supersedes the old next-step below):** implemented as `server/app/retrieval/reranking.py` (`CrossEncoderReranker` MiniLM-L6 + `NullReranker` fallback), wired post-hop in `AdaptiveRetrievalService.retrieve()` before `ContextBuilder.build()` (see `plan.md` Stages 0–4, `thinking.md` §3–5).

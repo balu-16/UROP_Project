@@ -307,8 +307,4 @@ class ChromaVectorStore(VectorStoreInterface):
         except Exception:
             pass
 
-    def save(self) -> None:
-        self.shutdown()
-
-
 VectorStore = ChromaVectorStore
